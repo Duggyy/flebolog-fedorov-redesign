@@ -150,6 +150,19 @@ const News = () => {
         </div>
       </section>
 
+      {/* CTA */}
+      <section className="bg-navy py-12">
+        <div className="container text-center">
+          <h2 className="text-2xl font-bold text-white mb-3">Запишитесь на консультацию</h2>
+          <p className="text-navy-foreground/70 mb-6 max-w-lg mx-auto text-sm">
+            Дмитрий Анатольевич всегда в курсе последних достижений флебологии и применяет их в своей практике.
+          </p>
+          <button className="bg-primary text-primary-foreground px-8 py-3 rounded-xl font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 active:scale-[0.97]">
+            Записаться на приём
+          </button>
+        </div>
+      </section>
+
       <SiteFooter />
     </div>);
 
