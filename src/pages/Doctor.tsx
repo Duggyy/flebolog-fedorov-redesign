@@ -1,10 +1,12 @@
 import SiteHeader from "@/components/SiteHeader";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
-import { Award, BookOpen, Microscope, Stethoscope, GraduationCap, FileText } from "lucide-react";
+import { Award, BookOpen, Microscope, Stethoscope, GraduationCap, FileText, X } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState } from "react";
 
 const Doctor = () => {
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   return (
     <div className="min-h-screen flex flex-col">
       <SiteHeader />
@@ -175,6 +177,32 @@ const Doctor = () => {
                   <span className="text-primary mt-0.5">▸</span>
                   <span><strong className="text-foreground">2024 г.</strong> — соавтор «IQ флебология в таблицах» (59 стр)</span>
                 </li>
+
+                {/* Gallery for IQ Phlebology Tables */}
+                <div className="grid grid-cols-3 gap-2 mt-4">
+                  {[
+                    { src: "/images/iq-phlebology-cover.jpg", label: "Обложка" },
+                    { src: "/images/iq-phlebology-authors-1.jpg", label: "Авторы 1" },
+                    { src: "/images/iq-phlebology-authors-2.jpg", label: "Авторы 2" },
+                  ].map((img) => (
+                    <button
+                      key={img.src}
+                      onClick={() => setSelectedImage(img.src)}
+                      className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-all duration-300 aspect-[2/3]"
+                    >
+                      <img
+                        src={img.src}
+                        alt={img.label}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                      <p className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent text-white text-xs font-semibold px-2 py-2 text-center">
+                        {img.label}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-0.5">▸</span>
                   <span><strong className="text-foreground">2026 г.</strong> — соавтор руководства для врачей «Краткое руководство по флебологии» (216 стр)</span>
@@ -238,6 +266,28 @@ const Doctor = () => {
       </section>
 
       <SiteFooter />
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors"
+            >
+              <X size={32} />
+            </button>
+            <img
+              src={selectedImage}
+              alt="Full size publication image"
+              className="w-full h-auto rounded-lg shadow-2xl"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
