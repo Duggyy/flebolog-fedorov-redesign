@@ -188,6 +188,10 @@ const Doctor = () => {
                       <img
                         src={img.src}
                         alt={img.label}
+                        loading="lazy"
+                        decoding="async"
+                        width={80}
+                        height={120}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
@@ -218,6 +222,10 @@ const Doctor = () => {
                       <img
                         src={img.src}
                         alt={img.label}
+                        loading="lazy"
+                        decoding="async"
+                        width={80}
+                        height={120}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
@@ -247,6 +255,10 @@ const Doctor = () => {
                       <img
                         src={img.src}
                         alt={img.label}
+                        loading="lazy"
+                        decoding="async"
+                        width={80}
+                        height={120}
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
@@ -332,6 +344,7 @@ const Doctor = () => {
             <img
               src={selectedImage}
               alt="Full size publication image"
+              loading="eager"
               className="w-full h-auto rounded-lg shadow-2xl"
             />
           </div>
