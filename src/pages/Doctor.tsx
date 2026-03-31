@@ -173,6 +173,31 @@ const Doctor = () => {
                   <span className="text-primary mt-0.5">▸</span>
                   <span><strong className="text-foreground">2023 г.</strong> — соавтор «IQ флебология: от сосудистой звездочки до трофической язвы» (212 стр)</span>
                 </li>
+
+                {/* Gallery for IQ Phlebology 2023 */}
+                <div className="grid grid-cols-2 gap-3 mt-4 max-w-[160px]">
+                  {[
+                    { src: "/images/iq-phlebology-2023-cover.jpg", label: "Обложка" },
+                    { src: "/images/iq-phlebology-2023-authors.jpg", label: "Авторы" },
+                  ].map((img) => (
+                    <button
+                      key={img.src}
+                      onClick={() => setSelectedImage(img.src)}
+                      className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-all duration-300 aspect-[2/3]"
+                    >
+                      <img
+                        src={img.src}
+                        alt={img.label}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                      <p className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent text-white text-xs font-semibold px-1 py-1 text-center text-[10px]">
+                        {img.label}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-0.5">▸</span>
                   <span><strong className="text-foreground">2024 г.</strong> — соавтор «IQ флебология в таблицах» (59 стр)</span>
