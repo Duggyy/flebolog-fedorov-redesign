@@ -179,7 +179,7 @@ const Doctor = () => {
                 </li>
 
                 {/* Gallery for IQ Phlebology Tables */}
-                <div className="grid grid-cols-3 gap-1 mt-4 max-w-xs">
+                <div className="grid grid-cols-3 gap-6 mt-4 max-w-[160px]">
                   {[
                     { src: "/images/iq-phlebology-cover.jpg", label: "Обложка" },
                     { src: "/images/iq-phlebology-authors-1.jpg", label: "Авторы 1" },
