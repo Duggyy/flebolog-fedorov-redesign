@@ -207,6 +207,30 @@ const Doctor = () => {
                   <span className="text-primary mt-0.5">▸</span>
                   <span><strong className="text-foreground">2026 г.</strong> — соавтор руководства для врачей «Краткое руководство по флебологии» (216 стр)</span>
                 </li>
+
+                {/* Gallery for Quick Phlebology Guide */}
+                <div className="grid grid-cols-2 gap-3 mt-4 max-w-[240px]">
+                  {[
+                    { src: "/images/quick-phlebology-guide-cover.jpg", label: "Обложка" },
+                    { src: "/images/quick-phlebology-guide-authors.jpg", label: "Авторы" },
+                  ].map((img) => (
+                    <button
+                      key={img.src}
+                      onClick={() => setSelectedImage(img.src)}
+                      className="group relative overflow-hidden rounded-lg shadow-md hover:shadow-lg transition-all duration-300 aspect-[2/3]"
+                    >
+                      <img
+                        src={img.src}
+                        alt={img.label}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                      <p className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent text-white text-xs font-semibold px-1 py-1 text-center text-[10px]">
+                        {img.label}
+                      </p>
+                    </button>
+                  ))}
+                </div>
               </ul>
             </div>
 
