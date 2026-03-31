@@ -165,7 +165,7 @@ const Doctor = () => {
             </div>
 
             <div className="bg-primary/5 rounded-xl p-5 mt-4 border border-primary/10">
-              <p className="text-sm font-semibold text-foreground mb-3">Медицинские руководства</p>
+              <p className="text-sm font-semibold text-foreground mb-3">Научные публикации</p>
               <ul className="space-y-2 text-sm mb-4">
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-0.5">▸</span>
