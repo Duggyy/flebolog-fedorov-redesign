@@ -179,7 +179,7 @@ const Doctor = () => {
                 </li>
 
                 {/* Gallery for IQ Phlebology Tables */}
-                <div className="grid grid-cols-3 gap-2 mt-4">
+                <div className="grid grid-cols-3 gap-1 mt-4 max-w-xs">
                   {[
                     { src: "/images/iq-phlebology-cover.jpg", label: "Обложка" },
                     { src: "/images/iq-phlebology-authors-1.jpg", label: "Авторы 1" },
@@ -196,7 +196,7 @@ const Doctor = () => {
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
                       />
                       <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
-                      <p className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent text-white text-xs font-semibold px-2 py-2 text-center">
+                      <p className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent text-white text-xs font-semibold px-1 py-1 text-center text-[10px]">
                         {img.label}
                       </p>
                     </button>
