@@ -209,7 +209,7 @@ const Doctor = () => {
                 </li>
 
                 {/* Gallery for Quick Phlebology Guide */}
-                <div className="grid grid-cols-2 gap-3 mt-4 max-w-[240px]">
+                <div className="grid grid-cols-2 gap-3 mt-4 max-w-[160px]">
                   {[
                     { src: "/images/quick-phlebology-guide-cover.jpg", label: "Обложка" },
                     { src: "/images/quick-phlebology-guide-authors.jpg", label: "Авторы" },
