@@ -31,7 +31,7 @@ const Doctor = () => {
               />
               <div className="mt-4 bg-primary/10 rounded-xl p-4 text-center">
                 <p className="text-sm font-semibold text-primary">Кандидат медицинских наук</p>
-                <p className="text-xs text-muted-foreground mt-1">Врач-флеболог, сосудистый хирург</p>
+                <p className="text-xs text-muted-foreground mt-1">Врач-флеболог, сосудистый хирург, УЗИ диагностики</p>
               </div>
             </div>
 
@@ -41,8 +41,8 @@ const Doctor = () => {
                 Фёдоров Дмитрий Анатольевич
               </h1>
               <p className="mt-4 text-muted-foreground leading-relaxed max-w-2xl text-lg">
-                Кандидат медицинских наук, врач-флеболог, сосудистый хирург в клинике «Ниармедик» г. Обнинск;
-                заведующий хирургического отделения центра флебологии «МИФЦ» в г. Москва.
+                Кандидат медицинских наук, врач хирург-флеболог, врач сердечно-сосудистый хирург-флеболог, врач УЗИ диагностики.
+                Работает в медцентрах: «МедАструм» (г. Москва), «ArtVe» (г. Москва), «Ниармедик» (г. Обнинск), «Медицина Плюс» (г. Смоленск).
               </p>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8">
@@ -105,9 +105,17 @@ const Doctor = () => {
                   Работает ведущим флебологом в клинике «Ниармедик-Обнинск».
                 </p>
                 <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">2018</span>
+                  <span className="text-primary mt-0.5 font-bold">2018–2023</span>
                   Заведующий хирургического отделения центра флебологии «МИФЦ» в Москве и ведущий хирург-флеболог
                   «Медицинского Инновационного Флебологического Центра».
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5 font-bold">2023</span>
+                  Врач-флеболог в «Медцентре эстетической флебологии ArtVe» (г. Москва).
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5 font-bold">2026</span>
+                  Врач-флеболог в медцентре «МедАструм» (г. Москва).
                 </p>
               </div>
             </div>
@@ -157,6 +165,24 @@ const Doctor = () => {
             </div>
 
             <div className="bg-primary/5 rounded-xl p-5 mt-4 border border-primary/10">
+              <p className="text-sm font-semibold text-foreground mb-3">Медицинские руководства</p>
+              <ul className="space-y-2 text-sm mb-4">
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">▸</span>
+                  <span><strong className="text-foreground">2023 г.</strong> — соавтор «IQ флебология: от сосудистой звездочки до трофической язвы» (212 стр)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">▸</span>
+                  <span><strong className="text-foreground">2024 г.</strong> — соавтор «IQ флебология в таблицах» (59 стр)</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-primary mt-0.5">▸</span>
+                  <span><strong className="text-foreground">2026 г.</strong> — соавтор руководства для врачей «Краткое руководство по флебологии» (216 стр)</span>
+                </li>
+              </ul>
+            </div>
+
+            <div className="bg-primary/5 rounded-xl p-5 mt-4 border border-primary/10">
               <p className="text-sm font-semibold text-foreground mb-2">Пионер в России</p>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-start gap-2">
@@ -190,9 +216,9 @@ const Doctor = () => {
             <div className="grid md:grid-cols-2 gap-3">
               {[
                 { title: "ЭВЛК", desc: "Эндовенозная лазерная коагуляция — малоинвазивное удаление поражённых вен." },
-                { title: "Тотальная ЭВЛК", desc: "Удаление не только магистральной вены, но и всех варикозных узлов с помощью внутрисосудистого лазера." },
+                { title: "Тотальная ЭВЛК", desc: "Удаление не только магистральной вены, но и всех варикозных притоков с помощью внутрисосудистого лазера." },
                 { title: "Склеротерапия", desc: "Микросклеротерапия, озоносклеротерапия, микропенная Foam-Form склеротерапия, УЗИ-контролируемая склеротерапия." },
-                { title: "Все стадии", desc: "Лечение варикоза от косметических стадий до осложнённых форм с трофическими нарушениями и язвами." },
+                { title: "ЧЛК", desc: "Чрезкожная лазерная коагуляция сосудистых сеточек и вен на ногах, теле, лице, кистях, стопах и лобной области." },
               ].map((m) => (
                 <div key={m.title} className="bg-muted rounded-xl p-4">
                   <p className="text-sm font-bold text-foreground mb-1">{m.title}</p>
