@@ -226,7 +226,7 @@ function ResultsContent() {
       {selectedImage && (
         <button
           type="button"
-          className="fixed inset-0 z-50 flex cursor-pointer items-center justify-center bg-black/55 p-4"
+          className="fixed inset-0 z-50 flex cursor-pointer items-start justify-center bg-black/55 p-4 overflow-y-auto pt-8"
           onClick={() => setSelectedImage(null)}
           aria-label="Закрыть увеличенное фото"
         >
@@ -234,7 +234,7 @@ function ResultsContent() {
             <img
               src={selectedImage}
               alt="Увеличенное фото"
-              className="block max-h-[50dvh] max-w-[calc(100vw-2rem)] object-contain md:max-w-[50vw]"
+              className="block max-h-[80dvh] max-w-[calc(100vw-2rem)] object-contain md:max-w-[50vw]"
             />
           </span>
         </button>

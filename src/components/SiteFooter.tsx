@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 const SiteFooter = () => {
   return (
     <footer className="bg-navy text-navy-foreground py-12">
@@ -6,10 +8,9 @@ const SiteFooter = () => {
           <div>
             <h3 className="text-lg font-bold text-white mb-4">Разделы</h3>
             <ul className="space-y-2 text-sm text-navy-foreground/80">
-              <li><a href="#" className="hover:text-white transition-colors">Главная</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Флебология</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Методы лечения</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Новости</a></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Главная</Link></li>
+              <li><Link to="/phlebology" className="hover:text-white transition-colors">Флебология</Link></li>
+              <li><Link to="/news" className="hover:text-white transition-colors">Новости</Link></li>
             </ul>
           </div>
         </div>
