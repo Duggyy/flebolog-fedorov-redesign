@@ -23,11 +23,11 @@ const conditions = [
 
 const methods = [
 { icon: Zap, label: "Склеротерапия", desc: "лечение вен без операции", bg: sclerotherapyBg },
-{ icon: Zap, label: "Лечение варикоза лазером", desc: "ЭВЛК" },
-{ icon: Scissors, label: "Малоинвазивные операции", desc: "на венах" },
-{ icon: Sparkles, label: "Удаление сосудистых звездочек", desc: "" },
-{ icon: Sparkles, label: "Микросклеротерапия", desc: "" }];
-
+{ icon: Zap, label: "Лечение варикоза лазером", desc: "ЭВЛК", bg: "/images/method-laser.png" },
+{ icon: Scissors, label: "Малоинвазивные операции на венах", desc: "", bg: "/images/method-operacii.png" },
+{ icon: Sparkles, label: "Удаление сосудистых звездочек", desc: "", bg: "/images/method-zvezdochki.png" },
+{ icon: Sparkles, label: "Микросклеротерапия", desc: "", bg: "/method-microsklerotherapy.jpg" }
+];
 
 const TreatmentSection = () => {
   const [activeTab, setActiveTab] = useState(0);
@@ -106,9 +106,9 @@ const MethodsContent = () =>
           style={{ backgroundImage: `url(${m.bg})` }} />
         
               
-              <div className="relative z-10 w-full p-5">
-                <p className="text-base font-bold text-white">{m.label}</p>
-                {m.desc && <p className="text-sm text-white/80 mt-1">{m.desc}</p>}
+              <div className="relative z-10 w-full h-full flex flex-col items-center justify-center p-5">
+                <p className="text-xl font-bold text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] leading-tight tracking-tight">{m.label}</p>
+                {m.desc && <p className="text-lg font-semibold text-white/95 mt-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">{m.desc}</p>}
               </div>
             </> :
 

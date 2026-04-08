@@ -92,16 +92,13 @@ const HeroSection = () => {
             </div>
 
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-3">
+                <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-3">
                 Профессиональная деятельность
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Закончил Московскую медицинскую Академию им. И.М.Сеченова в 1993 г.</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Работал в РНЦХ имени академика Б.В.Петровского до 2003 года.</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> С 2003 г. специализируется на лечении варикозного расширения вен.</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> 2003–2015 гг. — «Медицинское учреждение по проблемам флебологии», г. Москва.</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> 2018–2023 гг. — заведующий хирургическим отделением центра флебологии «МИФЦ», Москва.</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> С ноября 2023 года — врач-флеболог в Клинике ArtVe, Москва.</li>
+                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Федоров Дмитрий Анатольевич, 1969 г.р. закончил Московскую медицинскую Академию им. И.М.Сеченова в 1993 г.</li>
+                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> 2003-2015гг. Перешел на работу в «Медицинское учреждение по проблемам флебологии» (г. Москва), где основной сферой деятельности стало лечение варикозного расширения вен нижних конечностей.</li>
+                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> 2018-2023гг. заведующий хирургического отделения центра флебологии "МИФЦ" в Москве и ведущий хирурго-флеболог «Медицинского Инновационного Флебологического Центра».</li>
               </ul>
             </div>
 
@@ -110,11 +107,9 @@ const HeroSection = () => {
                 Научная деятельность
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Автор более 70 научных работ по общей и сосудистой хирургии.</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Патент на изобретение № 2264176 (2004 г.) — «Способ лечения варикозного расширения вен нижних конечностей».</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Соавтор руководства «IQ флебология: от сосудистой звёздочки до трофической язвы» (2023, 212 стр.).</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Соавтор руководства «IQ флебология в таблицах» (2024, 59 стр.).</li>
-                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Соавтор руководства для врачей «Краткое руководство по флебологии» (2026, 216 стр.).</li>
+                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Автор более 70 научных работ по разнообразным темам общей и сосудистой хирургии.</li>
+                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> В 2004г. получил патент на изобретение № 2264176 – «Способ лечения вариконого расширения вен нижних конечностей»</li>
+                <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Соавтор медицинских руководств по флебологии: 2023г – «IQ флебология: от сосудистой звездочки до трофической язвы» (212 стр). 2024г – «IQ флебология в таблицах» (59 стр). 2026г – руководство для врачей «Краткое руководство по флебологии» (216 стр).</li>
               </ul>
             </div>
           </div>

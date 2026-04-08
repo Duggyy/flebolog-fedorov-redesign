@@ -83,41 +83,37 @@ const Doctor = () => {
           <div className="space-y-4 text-muted-foreground leading-relaxed">
             <div className="bg-card rounded-xl p-5 border border-border">
               <div className="space-y-3">
-                <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">1993</span>
-                  Закончил Московскую медицинскую Академию им. И.М. Сеченова. В 1994 г. окончил клиническую интернатуру
-                  по специальности хирургия, в 1996 г. — клиническую ординатуру по специальности хирургия.
+                <p className="flex items-baseline gap-6">
+                  <span className="text-primary font-bold whitespace-nowrap">1993</span>
+                  <span className="text-muted-foreground">Закончил Московскую медицинскую Академию им. И.М. Сеченова. В 1994 г. окончил клиническую интернатуру по специальности хирургия, в 1996 г. — клиническую ординатуру по специальности хирургия.</span>
                 </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">1996–2003</span>
-                  Работал в отделении общей хирургии Российского научного центра хирургии имени академика Б.В. Петровского.
+                <p className="flex items-baseline gap-6">
+                  <span className="text-primary font-bold whitespace-nowrap">1996–2003</span>
+                  <span className="text-muted-foreground">Работал в отделении общей хирургии Российского научного центра хирургии имени академика Б.В. Петровского.</span>
                 </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">2003</span>
-                  Перешёл в «Медицинское учреждение по проблемам флебологии» (г. Москва), где основной сферой деятельности стало
-                  лечение варикозного расширения вен нижних конечностей.
+                <p className="flex items-baseline gap-6">
+                  <span className="text-primary font-bold whitespace-nowrap">2003</span>
+                  <span className="text-muted-foreground">Перешёл в «Медицинское учреждение по проблемам флебологии» (г. Москва), где основной сферой деятельности стало лечение варикозного расширения вен нижних конечностей.</span>
                 </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">2004</span>
-                  Стал соавтором изобретения «Способ лечения варикозного расширения вен нижних конечностей» — Патент №2264176,
-                  зарегистрирован в Государственном реестре изобретений РФ 20 ноября 2005 г.
+                <p className="flex items-baseline gap-6">
+                  <span className="text-primary font-bold whitespace-nowrap">2004</span>
+                  <span className="text-muted-foreground">Стал соавтором изобретения «Способ лечения варикозного расширения вен нижних конечностей» — Патент №2264176, зарегистрирован в Государственном реестре изобретений РФ 20 ноября 2005 г.</span>
                 </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">2015</span>
-                  Работает ведущим флебологом в клинике «Ниармедик-Обнинск».
+                <p className="flex items-baseline gap-6">
+                  <span className="text-primary font-bold whitespace-nowrap">2015</span>
+                  <span className="text-muted-foreground">Работает ведущим флебологом в клинике «Ниармедик-Обнинск».</span>
                 </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">2018–2023</span>
-                  Заведующий хирургического отделения центра флебологии «МИФЦ» в Москве и ведущий хирург-флеболог
-                  «Медицинского Инновационного Флебологического Центра».
+                <p className="flex items-baseline gap-6">
+                  <span className="text-primary font-bold whitespace-nowrap">2018–2023</span>
+                  <span className="text-muted-foreground">Заведующий хирургического отделения центра флебологии «МИФЦ» в Москве и ведущий хирург-флеболог «Медицинского Инновационного Флебологического Центра».</span>
                 </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">2023</span>
-                  Врач-флеболог в «Медцентре эстетической флебологии ArtVe» (г. Москва).
+                <p className="flex items-baseline gap-6">
+                  <span className="text-primary font-bold whitespace-nowrap">2023</span>
+                  <span className="text-muted-foreground">Врач-флеболог в «Медцентре эстетической флебологии ArtVe» (г. Москва).</span>
                 </p>
-                <p className="flex items-start gap-2">
-                  <span className="text-primary mt-0.5 font-bold">2026</span>
-                  Врач-флеболог в медцентре «МедАструм» (г. Москва).
+                <p className="flex items-baseline gap-6">
+                  <span className="text-primary font-bold whitespace-nowrap">2026</span>
+                  <span className="text-muted-foreground">Врач-флеболог в медцентре «МедАструм» (г. Москва).</span>
                 </p>
               </div>
             </div>
