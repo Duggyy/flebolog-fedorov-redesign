@@ -325,23 +325,24 @@ const Doctor = () => {
       <SiteFooter />
 
       {/* Image Modal */}
-      {selectedImage && (
+{selectedImage && (
         <div
-          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 md:p-8 overflow-auto"
           onClick={() => setSelectedImage(null)}
         >
-          <div className="relative max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+          <div className="relative w-full max-w-[90vw] md:max-w-[80vw] max-h-[90vh] md:max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setSelectedImage(null)}
-              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors"
+              className="fixed top-4 right-4 md:top-6 md:right-6 bg-background/90 backdrop-blur-sm rounded-full p-2 md:p-3 shadow-2xl hover:bg-background text-muted-foreground hover:text-foreground hover:scale-105 transition-all z-10 flex items-center justify-center"
+              aria-label="Close image"
             >
-              <X size={32} />
+              <X className="h-4 w-4 md:h-5 md:w-5" />
             </button>
             <img
               src={selectedImage}
               alt="Full size publication image"
               loading="eager"
-              className="w-full h-auto rounded-lg shadow-2xl"
+              className="w-auto h-auto max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl mx-auto block"
             />
           </div>
         </div>

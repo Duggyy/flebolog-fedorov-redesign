@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Syringe, Zap, Scissors, Sparkles } from "lucide-react";
+import { Syringe, Zap, Scissors, Sparkles, X } from "lucide-react";
 import sclerotherapyBg from "@/assets/sclerotherapy.png";
 import { treatmentResultsData } from "@/components/treatment-results-data";
 
@@ -26,7 +26,7 @@ const methods = [
 { icon: Zap, label: "Лечение варикоза лазером", desc: "ЭВЛК", bg: "/images/method-laser.png" },
 { icon: Scissors, label: "Малоинвазивные операции на венах", desc: "", bg: "/images/method-operacii.png" },
 { icon: Sparkles, label: "Удаление сосудистых звездочек", desc: "", bg: "/images/method-zvezdochki.png" },
-{ icon: Sparkles, label: "Микросклеротерапия", desc: "", bg: "/method-microsklerotherapy.jpg" }
+{ icon: Sparkles, label: "Микросклеротерапия", desc: "", bg: "/images/method-microsklerotherapy.jpg" }
 ];
 
 const TreatmentSection = () => {
@@ -223,21 +223,27 @@ function ResultsContent() {
         )}
       </div>
 
-      {selectedImage && (
-        <button
-          type="button"
-          className="fixed inset-0 z-50 flex cursor-pointer items-start justify-center bg-black/55 p-4 overflow-y-auto pt-8"
+{selectedImage && (
+        <div
+          className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 md:p-8 overflow-auto"
           onClick={() => setSelectedImage(null)}
-          aria-label="Закрыть увеличенное фото"
         >
-          <span className="overflow-hidden rounded-xl border-2 border-white bg-background shadow-2xl">
+          <div className="relative w-full max-w-[90vw] md:max-w-[80vw] max-h-[90vh] md:max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="fixed top-4 right-4 md:top-6 md:right-6 bg-background/90 backdrop-blur-sm rounded-full p-2 md:p-3 shadow-2xl hover:bg-background text-muted-foreground hover:text-foreground hover:scale-105 transition-all z-10 flex items-center justify-center"
+              aria-label="Close image"
+            >
+              <X className="h-4 w-4 md:h-5 md:w-5" />
+            </button>
             <img
               src={selectedImage}
               alt="Увеличенное фото"
-              className="block max-h-[80dvh] max-w-[calc(100vw-2rem)] object-contain md:max-w-[50vw]"
+              loading="eager"
+              className="w-auto h-auto max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl mx-auto block"
             />
-          </span>
-        </button>
+          </div>
+        </div>
       )}
     </div>
   );
