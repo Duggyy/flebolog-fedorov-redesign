@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Syringe, Zap, Scissors, Sparkles, X } from "lucide-react";
 import sclerotherapyBg from "@/assets/sclerotherapy.png";
 import { treatmentResultsData } from "@/components/treatment-results-data";
@@ -42,24 +43,44 @@ const TreatmentSection = () => {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full mb-10">
           {tabs.map((tab, i) =>
-          <button
-            key={i}
-            onClick={() => setActiveTab(i)}
-            className={`py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-[0.97] truncate leading-tight px-2 ${
-            activeTab === i ?
-            "bg-primary text-primary-foreground shadow-lg shadow-primary/20" :
-            "bg-white text-muted-foreground border border-border hover:border-primary/30 hover:text-foreground"}`
-            }>
-            
+            i === 3 ? (
+                <Link
+                key={i}
+                to="/reviews"
+                className={`py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-[0.97] truncate leading-tight px-2 block text-center ${
+                  activeTab === i ?
+                  "bg-primary text-primary-foreground shadow-lg shadow-primary/20" :
+                  "bg-white text-muted-foreground border border-border hover:border-primary/30 hover:text-foreground"}`}
+              >
+                {tab}
+              </Link>
+            ) : (
+            <button
+              key={i}
+              onClick={() => setActiveTab(i)}
+              className={`py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-[0.97] truncate leading-tight px-2 ${
+              activeTab === i ?
+              "bg-primary text-primary-foreground shadow-lg shadow-primary/20" :
+              "bg-white text-muted-foreground border border-border hover:border-primary/30 hover:text-foreground"}`}
+            >
+              
               {tab}
             </button>
+            )
           )}
         </div>
 
         {activeTab === 0 && <MethodsContent />}
         {activeTab === 1 && <ResultsContent />}
         {activeTab === 2 && <PlaceholderContent title="Эстетическая флебология. Результаты" />}
-        {activeTab === 3 && <ReviewsContent />}
+{activeTab === 3 && <div className="h-64 flex items-center justify-center bg-muted rounded-xl">
+  <div className="text-center">
+    <Link to="/reviews" className="text-primary hover:underline text-lg font-semibold block mb-2">
+      Перейти к отзывам
+    </Link>
+    <p className="text-muted-foreground text-sm">Читать отзывы пациентов и оставить свой</p>
+  </div>
+</div>}
         {activeTab === 4 && <PlaceholderContent title="Доклады и выступления" />}
         {activeTab === 5 && <PlaceholderContent title="Блог врача" />}
         {activeTab === 6 && <PlaceholderContent title="Фото с коллегами" />}

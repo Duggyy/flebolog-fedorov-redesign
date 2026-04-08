@@ -1,0 +1,20 @@
+Виджет шириной от 300px до 1500px, позволяющий собирать отзывы с сайта врача через систему "ПроДокторов". Рекомендуется размещать на странице "Отзывы". Особенности: полный функционал по аутсорсингу сбора реальных отзывов пациентов, включая предварительную их модерацию специалистами "ПроДокторов" и механизмы авторизации пациентов; возможность отображать уже имеющиеся в системе отзывы.
+
+Для размещения виджета скопируйте код ниже и добавьте на сайт клиники между тегами <body> ... </body>
+Сам код не редактируйте, иначе виджет может отображаться некорректно.
+
+
+<div id="pd_widget_big"  data-doctor="556844">
+<div class="pd_rate_header">Отзывы о враче Федоров Д. А.<br>
+<a target="_blank" class="pd_rate_new" href="https://prodoctorov.ru/new/rate/doctor/556844/"
+>Оставить отзыв</a></div>
+
+<div id="pd_widget_big_content"></div>
+<a target="_blank" href="https://prodoctorov.ru/obninsk/vrach/556844-fedorov/#otzivi" class="pd_read_all">Читать все отзывы</a>
+
+
+<span id="pd_powered_by"><a target="_blank" href="https://prodoctorov.ru"><img class='pd_logo' src="https://prodoctorov.ru/static/_v1/pd/logos/logo-pd-widget.png"></a></span>
+
+</div>
+<script defer src="https://prodoctorov.ru/static/js/widget_big.js?v7"></script>
+
