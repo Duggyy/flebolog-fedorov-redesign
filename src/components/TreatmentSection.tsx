@@ -40,12 +40,12 @@ const TreatmentSection = () => {
           Направления <span className="text-primary">лечения</span>
         </h2>
 
-        <div className="flex flex-wrap justify-center gap-2 mb-10">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full mb-10">
           {tabs.map((tab, i) =>
           <button
             key={i}
             onClick={() => setActiveTab(i)}
-            className={`py-3 rounded-xl text-sm font-semibold transition-all active:scale-[0.97] w-[calc(25%-6px)] ${
+            className={`py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-[0.97] truncate leading-tight px-2 ${
             activeTab === i ?
             "bg-primary text-primary-foreground shadow-lg shadow-primary/20" :
             "bg-white text-muted-foreground border border-border hover:border-primary/30 hover:text-foreground"}`
