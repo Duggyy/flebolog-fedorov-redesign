@@ -40,6 +40,14 @@ const stats = [
 
 
 const HeroSection = () => {
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://prodoctorov.ru/static/js/widget_mini.js?v06";
+    script.defer = true;
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+  
   return (
     <section className="bg-gradient-to-br from-muted via-background to-muted py-16">
       <div className="container">
@@ -113,6 +121,22 @@ const HeroSection = () => {
               </ul>
             </div>
           </div>
+
+          {/* ProDoctorov Mini Widget - script loaded in useEffect */}
+          <div id="pd_widget_mini_home" className="pd_widget_mini max-w-md mt-8 p-2 border rounded-lg bg-white" data-doctor="556844">
+            <a target="_blank" className="pd_doctor_name block text-center font-semibold text-foreground mb-2" href="https://prodoctorov.ru/obninsk/vrach/556844-fedorov/">
+              Федоров Дмитрий Анатольевич
+            </a>
+            <div className="pd_widget_mini_content min-h-[60px] flex items-center justify-center text-muted-foreground text-sm" id="pd_widget_mini_content_d556844_home">
+              Рейтинг и отзывы загружаются...
+            </div>
+            <div className="text-center">
+              <a target="_blank" href="https://prodoctorov.ru" className="inline-block">
+                <img className="pd_logo mx-auto" width="80" src="/images/prodoctorov-logo.png" alt="ProDoctorov" />
+              </a>
+            </div>
+          </div>
+
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-12">
@@ -127,5 +151,6 @@ const HeroSection = () => {
             </div>)}
         </div>
       </div>
-    </section>);};
+    </section>);
+  };
 export default HeroSection;
