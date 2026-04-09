@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Award, Stethoscope, CalendarCheck, ShieldCheck } from "lucide-react";
 import { Link } from "react-router-dom";
 import artveImg from "@/assets/artve.png";
@@ -38,7 +39,6 @@ const stats = [
 { icon: CalendarCheck, label: "30+ лет", desc: "Опыт работы" },
 { icon: ShieldCheck, label: "5000+", desc: "Успешных операций" }];
 
-
 const HeroSection = () => {
   useEffect(() => {
     const script = document.createElement("script");
@@ -52,19 +52,32 @@ const HeroSection = () => {
     <section className="bg-gradient-to-br from-muted via-background to-muted py-16">
       <div className="container">
         <div className="flex flex-col md:flex-row gap-10 items-start animate-fade-up">
-          <div className="md:w-5/12 flex-shrink-0">
+          <div className="md:w-5/12 flex-shrink-0 flex flex-col items-center">
             <div className="relative">
               <img
                 alt="Доктор Фёдоров Д.А."
-                className="rounded-2xl w-full max-w-sm shadow-[0_8px_30px_-12px_hsl(220_55%_12%/0.3)]" src="/images/475397a4-aec3-4fd8-b76a-3aa7437915d9.jpg" />
+                className="rounded-2xl w-full max-w-sm shadow-[0_8px_30px_-12px_hsl(220_55%_12%/0.3)] mx-auto" 
+                src="/images/475397a4-aec3-4fd8-b76a-3aa7437915d9.jpg" />
               <div className="absolute -bottom-4 -right-4 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold shadow-lg">
                 ✦ Ведущий специалист
               </div>
             </div>
-            <div className="mt-8 max-w-sm">
-              <Link to="/doctor" className="inline-block w-full text-center bg-primary text-primary-foreground px-8 py-3 rounded-xl font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 active:scale-[0.97]">
+            <div className="mt-8 w-full max-w-sm">
+              <Link to="/doctor" className="inline-block w-full text-center bg-primary text-primary-foreground px-8 py-3 rounded-xl font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20 active:scale-[0.97] mb-4 mx-auto block">
                 Подробнее о враче
               </Link>
+              {/* ProDoctorov Mini Widget under button - centered */}
+              <div className="text-center">
+                <div id="pd_widget_mini_home" className="pd_widget_mini inline-block" data-doctor="556844">
+                  <a target="_blank" className="pd_doctor_name block text-sm font-semibold mb-1" href="https://prodoctorov.ru/obninsk/vrach/556844-fedorov/">
+                    Федоров Д.А.
+                  </a>
+                  <div className="pd_widget_mini_content text-xs text-muted-foreground min-h-[40px] text-center" id="pd_widget_mini_content_d556844_home">
+                    Рейтинг загружается...
+                  </div>
+                  <img className="pd_logo mt-2 mx-auto block w-16 h-auto" src="/images/prodoctorov-logo.png" alt="ProDoctorov" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -100,7 +113,7 @@ const HeroSection = () => {
             </div>
 
             <div className="mt-6">
-                <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-3">
+              <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-3">
                 Профессиональная деятельность
               </h3>
               <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
@@ -121,36 +134,25 @@ const HeroSection = () => {
               </ul>
             </div>
           </div>
-
-          {/* ProDoctorov Mini Widget - script loaded in useEffect */}
-          <div id="pd_widget_mini_home" className="pd_widget_mini max-w-md mt-8 p-2 border rounded-lg bg-white" data-doctor="556844">
-            <a target="_blank" className="pd_doctor_name block text-center font-semibold text-foreground mb-2" href="https://prodoctorov.ru/obninsk/vrach/556844-fedorov/">
-              Федоров Дмитрий Анатольевич
-            </a>
-            <div className="pd_widget_mini_content min-h-[60px] flex items-center justify-center text-muted-foreground text-sm" id="pd_widget_mini_content_d556844_home">
-              Рейтинг и отзывы загружаются...
-            </div>
-            <div className="text-center">
-              <a target="_blank" href="https://prodoctorov.ru" className="inline-block">
-                <img className="pd_logo mx-auto" width="80" src="/images/prodoctorov-logo.png" alt="ProDoctorov" />
-              </a>
-            </div>
-          </div>
-
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-12">
-          {stats.map((s) => <div key={s.label} className="bg-white rounded-xl p-5 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.12)] hover:shadow-[0_4px_20px_-4px_hsl(220_15%_50%/0.18)] transition-shadow flex items-start gap-3 active:scale-[0.98]">
-              <div className="bg-primary/10 rounded-lg p-2.5">
+          {stats.map((s) => (
+            <div key={s.label} className="bg-white rounded-xl p-5 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.12)] hover:shadow-[0_4px_20px_-4px_hsl(220_15%_50%/0.18)] transition-all flex items-start gap-3 cursor-pointer active:scale-[0.98]">
+              <div className="bg-primary/10 rounded-lg p-2.5 flex-shrink-0">
                 <s.icon className="h-5 w-5 text-primary" />
               </div>
               <div>
                 <p className="text-sm font-bold text-foreground">{s.label}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{s.desc}</p>
               </div>
-            </div>)}
+            </div>
+          ))}
         </div>
       </div>
-    </section>);
-  };
+    </section>
+  );
+};
+
 export default HeroSection;
+
