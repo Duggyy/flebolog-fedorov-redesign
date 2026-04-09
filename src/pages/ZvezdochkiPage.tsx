@@ -109,8 +109,16 @@ const ZvezdochkiPage = () => (
       </div>
     </section>
 
-    <TreatmentSection />
-
+    <div className="py-12 bg-background">
+      <div className="container text-center">
+        <Link 
+          to="/" 
+          className="inline-block bg-primary text-primary-foreground px-12 py-4 rounded-xl text-lg font-semibold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-[0.97] max-w-max mx-auto"
+        >
+          ← На главную
+        </Link>
+      </div>
+    </div>
     <SiteFooter />
   </div>
 );
