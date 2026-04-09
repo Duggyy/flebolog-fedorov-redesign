@@ -1,28 +1,16 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import { Link } from "react-router-dom";
 
 const Reviews = () => {
-  const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://prodoctorov.ru/static/js/widget_big.js?v7";
     script.defer = true;
     script.async = true;
-    script.id = "pd-script";
     document.body.appendChild(script);
-
-    script.onload = () => setLoading(false);
-
-    return () => {
-      const existingScript = document.getElementById("pd-script");
-      if (existingScript) {
-        existingScript.remove();
-      }
-    };
   }, []);
 
   return (
@@ -52,24 +40,29 @@ const Reviews = () => {
         </div>
       </section>
 
-      {/* Widget */}
+      {/* ProDoctorov Widget */}
       <section className="py-20 bg-background">
-        <div className="container max-w-4xl">
-          <div id="pd_widget_big" data-doctor="556844" className="w-full">
-              <div className="pd_rate_header text-center mb-8">
-                <div className="text-2xl font-bold text-foreground mb-2">Отзывы о враче Федоров Д. А.</div>
-
-              </div>
-
-              <div id="pd_widget_big_content" className="w-full min-h-[500px] bg-white rounded-2xl shadow-2xl border overflow-hidden mb-8"></div>
-
-              <div className="text-center mt-8 opacity-75">
-                <a target="_blank" href="https://prodoctorov.ru" className="inline-block">
-                  <img src="https://prodoctorov.ru/static/_v1/pd/logos/logo-pd-widget.png" alt="ProDoctorov" className="h-8 w-auto mx-auto" />
-                </a>
+        <div className="container max-w-4xl p-8">
+          <div id="pd_widget_big" data-doctor="556844">
+            <div className="pd_rate_header">Отзывы о враче Федоров Д. А.<br/>
+            <a target="_blank" className="pd_rate_new" href="https://prodoctorov.ru/new/rate/doctor/556844/">Оставить отзыв</a>
+            </div>
+            <div id="pd_widget_big_content" className="w-full min-h-[600px] bg-gradient-to-br from-gray-100 to-gray-200 rounded-2xl p-8 text-center flex items-center justify-center text-gray-500">
+              <div>
+                <div className="w-24 h-24 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                  <span className="text-2xl font-bold text-primary">★</span>
+                </div>
+                <h3 className="text-xl font-bold mb-2">Отзывы ProDoctorov</h3>
+                <p className="text-sm">Виджет загружается...</p>
               </div>
             </div>
-
+            <a target="_blank" href="https://prodoctorov.ru/obninsk/vrach/556844-fedorov/#otzivi" className="pd_read_all">Читать все отзывы</a>
+            <span id="pd_powered_by">
+              <a target="_blank" href="https://prodoctorov.ru">
+<img className="pd_logo" src="/images/prodoctorov-logo.png" alt="ProDoctorov" />
+              </a>
+            </span>
+          </div>
         </div>
       </section>
 
