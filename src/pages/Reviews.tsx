@@ -47,7 +47,7 @@ const Reviews = () => {
             Отзывы о нашей работе
           </h1>
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Более 1000 довольных пациентов. Настоящие истории выздоровления.
+            Более 5000 довольных пациентов. Настоящие истории выздоровления.
           </p>
         </div>
       </section>

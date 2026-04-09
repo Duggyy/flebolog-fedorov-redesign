@@ -16,11 +16,11 @@ const tabs = [
 
 
 const conditions = [
-{ icon: Syringe, label: "Варикозная болезнь" },
-{ icon: Syringe, label: "Тромбофлебит" },
-{ icon: Syringe, label: "Сосудистые звездочки" },
-{ icon: Syringe, label: "Трофические язвы" }];
-
+{ icon: Syringe, label: "Варикозная болезнь", path: "/varikoz" },
+{ icon: Syringe, label: "Тромбофлебит", path: "/tromboflebit" },
+{ icon: Syringe, label: "Сосудистые звездочки", path: "/zvezdochki" },
+{ icon: Syringe, label: "Трофические язвы", path: "/yazvy" }
+];
 
 const methods = [
 { icon: Zap, label: "Склеротерапия", desc: "лечение вен без операции", bg: sclerotherapyBg },
@@ -99,17 +99,18 @@ const MethodsContent = () =>
     </p>
 
     <h3 className="text-lg font-bold text-foreground mb-4">Что мы лечим?</h3>
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
       {conditions.map((c) =>
-    <div
-      key={c.label}
-      className="bg-white rounded-xl p-4 flex items-center gap-3 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] hover:shadow-[0_4px_20px_-4px_hsl(220_15%_50%/0.16)] transition-shadow cursor-pointer active:scale-[0.98]">
-      
+        <Link 
+          key={c.label}
+          to={c.path}
+          className="bg-white rounded-xl p-4 flex items-center gap-3 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] hover:shadow-[0_4px_20px_-4px_hsl(220_15%_50%/0.16)] transition-all hover:-translate-y-1 block"
+        >
           <div className="bg-primary/10 rounded-lg p-2">
             <c.icon className="h-4 w-4 text-primary flex-shrink-0" />
           </div>
           <span className="text-sm font-semibold text-foreground">{c.label}</span>
-        </div>
+        </Link>
     )}
     </div>
 
