@@ -3,6 +3,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAnalytics } from "@/hooks/use-analytics";
 import Index from "./pages/Index.tsx";
 import Doctor from "./pages/Doctor.tsx";
 import Phlebology from "./pages/Phlebology.tsx";
@@ -16,12 +17,18 @@ import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
 
+const Analytics = () => {
+  useAnalytics();
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <Analytics />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/doctor" element={<Doctor />} />

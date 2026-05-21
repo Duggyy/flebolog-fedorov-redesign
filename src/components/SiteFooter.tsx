@@ -16,8 +16,21 @@ const SiteFooter = () => {
           </div>
         </div>
 
-        <div className="border-t border-white/10 mt-8 pt-6 text-center text-xs text-navy-foreground/50">
+        <div className="border-t border-white/10 mt-8 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-navy-foreground/80">
           <p>© 2026 Флеболог Фёдоров Д.А. Все права защищены.</p>
+          <a
+            href="https://metrika.yandex.ru/stat/?id=108735234&from=informer"
+            target="_blank"
+            rel="nofollow"
+            className="shrink-0"
+          >
+            <img
+              src="https://informer.yandex.ru/informer/108735234/3_1_FFFFFFFF_EFEFEFFF_0_pageviews"
+              style={{ width: 88, height: 31, border: 0 }}
+              alt="Яндекс.Метрика"
+              title="Яндекс.Метрика: данные за сегодня (просмотры, визиты и уникальные посетители)"
+            />
+          </a>
         </div>
       </div>
     </footer>

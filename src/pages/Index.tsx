@@ -7,11 +7,14 @@ import SiteFooter from "@/components/SiteFooter";
 const Index = () => {
   return (
     <div className="min-h-screen flex flex-col">
-      <SiteHeader />
-      <SiteNav />
-      <HeroSection />
-      <TreatmentSection />
-      <SiteFooter />
+  <SiteHeader />
+  <SiteNav />
+  <main className="flex-1">
+    <HeroSection />
+    <TreatmentSection />
+  </main>
+  <SiteFooter />
+
     </div>
   );
 };

@@ -37,7 +37,8 @@ const Reviews = () => {
       <SiteHeader />
       <SiteNav />
 
-      {/* Breadcrumb */}
+      <main className="flex-1">
+        {/* Breadcrumb */}
       <div className="bg-muted border-b border-border">
         <div className="container py-3 text-sm text-muted-foreground">
           <Link to="/" className="hover:text-primary transition-colors">Главная</Link>
@@ -115,6 +116,7 @@ const Reviews = () => {
           </div>
         </div>
       </section>
+      </main>
 
       <SiteFooter />
     </div>
@@ -122,4 +124,3 @@ const Reviews = () => {
 };
 
 export default Reviews;
-

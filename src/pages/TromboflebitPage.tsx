@@ -7,10 +7,12 @@ import { Syringe } from "lucide-react";
 
 const TromboflebitPage = () => (
   <div className="min-h-screen flex flex-col">
-    <SiteHeader />
-    <SiteNav />
+  <SiteHeader />
+  <SiteNav />
 
+  <main className="flex-1">
     {/* Breadcrumb */}
+
     <div className="bg-muted border-b border-border">
       <div className="container py-3 text-sm text-muted-foreground">
         <Link to="/" className="hover:text-primary transition-colors">Главная</Link>
@@ -144,9 +146,9 @@ const TromboflebitPage = () => (
         </Link>
       </div>
     </div>
-    <SiteFooter />
-  </div>
+  </main>
+  <SiteFooter />
+</div>
 );
 
 export default TromboflebitPage;
-

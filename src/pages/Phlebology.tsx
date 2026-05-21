@@ -34,7 +34,8 @@ const Phlebology = () => {
       <SiteHeader />
       <SiteNav />
 
-      {/* Hero */}
+      <main className="flex-1">
+        {/* Hero */}
       <section className="bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-14">
         <div className="container">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
@@ -139,6 +140,7 @@ const Phlebology = () => {
           </div>
         </div>
       </section>
+      </main>
 
       <SiteFooter />
     </div>

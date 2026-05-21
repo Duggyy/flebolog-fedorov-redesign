@@ -12,7 +12,8 @@ const Doctor = () => {
       <SiteHeader />
       <SiteNav />
 
-      {/* Breadcrumb */}
+      <main className="flex-1">
+        {/* Breadcrumb */}
       <div className="bg-muted border-b border-border">
         <div className="container py-3 text-sm text-muted-foreground">
           <Link to="/" className="hover:text-primary transition-colors">Главная</Link>
@@ -28,6 +29,8 @@ const Doctor = () => {
             <div className="md:w-4/12 flex-shrink-0">
               <img
                 alt="Фёдоров Дмитрий Анатольевич"
+                width="400"
+                height="530"
                 className="rounded-2xl w-full max-w-sm shadow-[0_8px_30px_-12px_hsl(var(--navy)/0.3)]"
                 src="/images/475397a4-aec3-4fd8-b76a-3aa7437915d9.jpg"
               />
@@ -326,6 +329,8 @@ const Doctor = () => {
         </div>
       </section>
 
+      </main>
+
       <SiteFooter />
 
       {/* Image Modal */}
@@ -345,7 +350,10 @@ const Doctor = () => {
             <img
               src={selectedImage}
               alt="Full size publication image"
+              width="600"
+              height="900"
               loading="eager"
+              decoding="async"
               className="w-auto h-auto max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl mx-auto block"
             />
           </div>

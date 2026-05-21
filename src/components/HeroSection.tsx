@@ -56,6 +56,8 @@ const HeroSection = () => {
             <div className="relative">
               <img
                 alt="Доктор Фёдоров Д.А."
+                width="400"
+                height="530"
                 className="rounded-2xl w-full max-w-sm shadow-[0_8px_30px_-12px_hsl(220_55%_12%/0.3)] mx-auto" 
                 src="/images/475397a4-aec3-4fd8-b76a-3aa7437915d9.jpg" />
               <div className="absolute -bottom-4 -right-4 bg-primary text-primary-foreground px-4 py-2 rounded-xl text-sm font-semibold shadow-lg">
@@ -113,9 +115,10 @@ const HeroSection = () => {
             </div>
 
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-3">
-                Профессиональная деятельность
-              </h3>
+            <h2 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-3">
+              Профессиональная деятельность
+            </h2>
+
               <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
                 <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Федоров Дмитрий Анатольевич, 1969 г.р. закончил Московскую медицинскую Академию им. И.М.Сеченова в 1993 г.</li>
                 <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> 2003-2015гг. Перешел на работу в «Медицинское учреждение по проблемам флебологии» (г. Москва), где основной сферой деятельности стало лечение варикозного расширения вен нижних конечностей.</li>
@@ -124,9 +127,10 @@ const HeroSection = () => {
             </div>
 
             <div className="mt-6">
-              <h3 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-3">
-                Научная деятельность
-              </h3>
+            <h2 className="text-sm font-semibold text-foreground border-b border-border pb-2 mb-3">
+              Научная деятельность
+            </h2>
+
               <ul className="space-y-2 text-sm text-muted-foreground leading-relaxed">
                 <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> Автор более 70 научных работ по разнообразным темам общей и сосудистой хирургии.</li>
                 <li className="flex items-start gap-2"><span className="text-primary mt-0.5">▸</span> В 2004г. получил патент на изобретение № 2264176 – «Способ лечения вариконого расширения вен нижних конечностей»</li>
@@ -155,4 +159,3 @@ const HeroSection = () => {
 };
 
 export default HeroSection;
-

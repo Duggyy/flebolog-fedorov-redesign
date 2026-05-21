@@ -159,45 +159,6 @@ const MethodsContent = () =>
   </div>;
 
 
-const priceData = [
-{ name: "Первичный прием врача-флеболога", price: "1 815" },
-{ name: "Первичный прием врача-флеболога, к.м.н.", price: "2 145" },
-{ name: "Повторный прием врача-флеболога", price: "1 650" },
-{ name: "Профилактический прием", price: "1 650" },
-{ name: "Склеротерапия (Foam-form), 1 сеанс", price: "8 800" },
-{ name: "Склеротерапия на голени, 1 конечность", price: "9 350" },
-{ name: "Склеротерапия на бедре, 1 конечность", price: "9 350" },
-{ name: "Кроссэктомия, 1 конечность", price: "17 600" },
-{ name: "Минифлебэктомия по Варади, 1 конечность", price: "17 600" },
-{ name: "ЭВЛК, 1 магистральная вена", price: "44 000" },
-{ name: "ЭВЛК, 2 магистральные вены", price: "77 000" },
-{ name: "ЭВЛК радиальным световодом, 1 вена", price: "49 500" },
-{ name: "Лазерная коагуляция, 1 минута", price: "110" }];
-
-
-const PriceContent = () =>
-<div className="animate-fade-up">
-    <div className="bg-white rounded-xl shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] overflow-hidden">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-navy text-white">
-            <th className="px-5 py-4 text-left font-semibold">Наименование услуги</th>
-            <th className="px-5 py-4 text-right font-semibold whitespace-nowrap">Цена, руб.</th>
-          </tr>
-        </thead>
-        <tbody>
-          {priceData.map((item, i) =>
-        <tr key={i} className={`border-b border-border transition-colors hover:bg-muted/50 ${i % 2 === 0 ? "bg-white" : "bg-muted/30"}`}>
-              <td className="px-5 py-3.5 text-foreground">{item.name}</td>
-              <td className="px-5 py-3.5 text-right font-semibold tabular-nums text-primary">{item.price}</td>
-            </tr>
-        )}
-        </tbody>
-      </table>
-    </div>
-  </div>;
-
-
 function ResultsContent() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
@@ -209,36 +170,44 @@ function ResultsContent() {
             <div className="grid grid-cols-2">
               <div className="p-3 text-center md:p-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-primary">До</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedImage(item.before)}
-                  className="mt-2 block w-full overflow-hidden rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  aria-label="Открыть фото до лечения"
-                >
-                  <img
-                    src={item.before}
-                    alt="До лечения"
-                    loading="eager"
-                    className="aspect-square w-full object-cover"
-                  />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedImage(item.before)}
+                    className="mt-2 block w-full overflow-hidden rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    aria-label="Открыть фото до лечения"
+                  >
+                    <img
+                      src={item.before}
+                      alt="До лечения"
+                      width="400"
+                      height="400"
+                      loading="lazy"
+                      decoding="async"
+                      className="aspect-square w-full object-cover"
+                    />
+                  </button>
+
               </div>
 
               <div className="border-l border-border p-3 text-center md:p-4">
                 <span className="text-xs font-bold uppercase tracking-wider text-secondary">После</span>
-                <button
-                  type="button"
-                  onClick={() => setSelectedImage(item.after)}
-                  className="mt-2 block w-full overflow-hidden rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  aria-label="Открыть фото после лечения"
-                >
-                  <img
-                    src={item.after}
-                    alt="После лечения"
-                    loading="eager"
-                    className="aspect-square w-full object-cover"
-                  />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedImage(item.after)}
+                    className="mt-2 block w-full overflow-hidden rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    aria-label="Открыть фото после лечения"
+                  >
+                    <img
+                      src={item.after}
+                      alt="После лечения"
+                      width="400"
+                      height="400"
+                      loading="lazy"
+                      decoding="async"
+                      className="aspect-square w-full object-cover"
+                    />
+                  </button>
+
               </div>
             </div>
           </article>
@@ -261,7 +230,10 @@ function ResultsContent() {
             <img
               src={selectedImage}
               alt="Увеличенное фото"
+              width="800"
+              height="800"
               loading="eager"
+              decoding="async"
               className="w-auto h-auto max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl mx-auto block"
             />
           </div>
@@ -271,55 +243,6 @@ function ResultsContent() {
   );
 }
 
-
-
-const reviews = [
-{
-  name: "Амелюшкина Ольга Александровна",
-  text: "Выражаю благодарность Дмитрию Анатольевичу за проведенную операцию (ЭВЛК)! С первой встречи доктор располагает к себе, очень внимателен!"
-},
-{
-  name: "Каткова Татьяна Александровна",
-  text: "Прошло четыре года после ЭВЛК. Ноги после лечения не узнать! Главное, что вены проходимы, что ноги не устают. Спасибо доктору Д.А. Федорову!"
-},
-{
-  name: "Пылаева Марина Васильевна",
-  text: "Он врач от БОГА, ему не страшно доверить свою жизнь. Большое ему человеческое СПАСИБО за внимательное и трепетное отношение к пациентам и огромный ПРОФЕССИОНАЛИЗМ."
-},
-{
-  name: "Александр Кобылецкий",
-  text: "Осмотр через неделю после операции показал, что всё получилось с первого раза, вена спаялась по всей длине, заживает всё хорошо. Дмитрию Анатольевичу большое спасибо!"
-}];
-
-
-const ReviewsContent = () =>
-<div className="animate-fade-up">
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      {reviews.map((r, i) =>
-    <div key={i} className="bg-white rounded-xl p-6 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] relative">
-          <div className="text-5xl text-primary/15 font-serif absolute top-3 left-4 leading-none">"</div>
-          <p className="text-sm text-muted-foreground leading-relaxed relative z-10 pt-4">{r.text}</p>
-          <div className="mt-4 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
-              {r.name.charAt(0)}
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-foreground">{r.name}</p>
-              <p className="text-xs text-muted-foreground">Пациент</p>
-            </div>
-          </div>
-        </div>
-    )}
-    </div>
-    <div className="mt-6 flex gap-4">
-      <a href="#" className="text-sm font-semibold text-primary hover:underline">
-        Оставить отзыв на Продокторов →
-      </a>
-      <a href="#" className="text-sm font-semibold text-secondary hover:underline">
-        Читать все отзывы →
-      </a>
-    </div>
-  </div>;
 
 
 const PlaceholderContent = ({ title }: {title: string;}) =>

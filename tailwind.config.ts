@@ -80,8 +80,8 @@ export default {
           to: { height: "0" },
         },
         "fade-up": {
-          from: { opacity: "0", transform: "translateY(16px)", filter: "blur(4px)" },
-          to: { opacity: "1", transform: "translateY(0)", filter: "blur(0)" },
+          from: { opacity: "0", transform: "translateY(16px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {

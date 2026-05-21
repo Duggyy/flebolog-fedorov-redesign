@@ -96,7 +96,8 @@ const News = () => {
       <SiteHeader />
       <SiteNav />
 
-      {/* Hero */}
+      <main className="flex-1">
+        {/* Hero */}
       <section className="bg-gradient-to-br from-primary/5 via-background to-secondary/5 py-14">
         <div className="container">
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
@@ -128,8 +129,11 @@ const News = () => {
                   <img
                   src={item.image}
                   alt={item.title}
+                  width="640"
+                  height="400"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  loading="lazy" />
+                  loading="lazy"
+                  decoding="async" />
                 
                 </div>
                 <div className="p-5">
@@ -137,9 +141,9 @@ const News = () => {
                     <Calendar className="h-3.5 w-3.5" />
                     <time>{item.date}</time>
                   </div>
-                  <h2 className="text-sm font-bold text-foreground leading-snug mb-2 line-clamp-2">
+                  <h3 className="text-sm font-bold text-foreground leading-snug mb-2 line-clamp-2">
                     {item.title}
-                  </h2>
+                  </h3>
                   <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
                     {item.text}
                   </p>
@@ -149,6 +153,7 @@ const News = () => {
           </div>
         </div>
       </section>
+      </main>
 
       <SiteFooter />
     </div>);
