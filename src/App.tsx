@@ -13,6 +13,7 @@ import VarikozPage from "./pages/VarikozPage.tsx";
 import TromboflebitPage from "./pages/TromboflebitPage.tsx";
 import ZvezdochkiPage from "./pages/ZvezdochkiPage.tsx";
 import YazvyPage from "./pages/YazvyPage.tsx";
+import ConferencePhotos from "./pages/ConferencePhotos.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -39,6 +40,8 @@ const App = () => (
           <Route path="/tromboflebit" element={<TromboflebitPage />} />
           <Route path="/zvezdochki" element={<ZvezdochkiPage />} />
           <Route path="/yazvy" element={<YazvyPage />} />
+          <Route path="/conference-photos" element={<ConferencePhotos />} />
+          <Route path="/conference-photos/:slug" element={<ConferencePhotos />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
@@ -47,4 +50,3 @@ const App = () => (
 );
 
 export default App;
-

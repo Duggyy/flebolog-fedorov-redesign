@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Syringe, Zap, Scissors, Sparkles, X } from "lucide-react";
-import sclerotherapyBg from "@/assets/sclerotherapy.png";
 import { treatmentResultsData } from "@/components/treatment-results-data";
 
 const tabs = [
@@ -23,7 +22,7 @@ const conditions = [
 ];
 
 const methods = [
-{ icon: Zap, label: "Склеротерапия", desc: "лечение вен без операции", bg: sclerotherapyBg },
+  { icon: Zap, label: "Склеротерапия", desc: "лечение вен без операции", bg: "/images/method-microsklerotherapy.jpg" },
 { icon: Zap, label: "Лечение варикоза лазером", desc: "ЭВЛК", bg: "/images/method-laser.png" },
 { icon: Scissors, label: "Малоинвазивные операции на венах", desc: "", bg: "/images/method-operacii.png" },
 { icon: Sparkles, label: "Удаление сосудистых звездочек", desc: "", bg: "/images/method-zvezdochki.png" },
@@ -36,17 +35,16 @@ const TreatmentSection = () => {
   return (
     <section className="bg-section-bg py-16">
       <div className="container">
-        <p className="text-secondary text-sm font-semibold uppercase tracking-widest mb-2">Наши услуги</p>
         <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-8">
           Направления <span className="text-primary">лечения</span>
         </h2>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full mb-10">
           {tabs.map((tab, i) =>
-            i === 3 ? (
+            i === 3 || i === 7 ? (
                 <Link
                 key={i}
-                to="/reviews"
+                to={i === 3 ? "/reviews" : "/conference-photos"}
                 className={`py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-[0.97] truncate leading-tight px-2 block text-center ${
                   activeTab === i ?
                   "bg-primary text-primary-foreground shadow-lg shadow-primary/20" :
@@ -84,7 +82,14 @@ const TreatmentSection = () => {
         {activeTab === 4 && <PlaceholderContent title="Доклады и выступления" />}
         {activeTab === 5 && <PlaceholderContent title="Блог врача" />}
         {activeTab === 6 && <PlaceholderContent title="Фото с коллегами" />}
-        {activeTab === 7 && <PlaceholderContent title="Фото с конференций" />}
+        {activeTab === 7 && <div className="h-64 flex items-center justify-center bg-muted rounded-xl">
+          <div className="text-center">
+            <Link to="/conference-photos" className="text-primary hover:underline text-lg font-semibold block mb-2">
+              Перейти к фотографиям с конференций
+            </Link>
+            <p className="text-muted-foreground text-sm">Фотографии с профессиональных конференций и форумов</p>
+          </div>
+        </div>}
       </div>
     </section>);
 

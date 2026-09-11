@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "dev:site": "vite --config vite.site.config.ts",
+    "dev:clinicbase": "vite --config vite.clinicbase.config.ts",
+    "build": "npm run build:all",
+    "build:site": "vite build --config vite.site.config.ts",
+    "build:clinicbase": "vite build --config vite.clinicbase.config.ts && node scripts/inline-clinicbase-css.mjs && mv dist-clinicbase/clinicbase.html dist-clinicbase/index.html",
+    "build:all": "npm run build:site && npm run build:clinicbase",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",

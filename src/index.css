@@ -57,3 +57,33 @@
     text-wrap: pretty;
   }
 }
+
+.screen-hidden-print-copy {
+  display: none;
+}
+
+@media print {
+  .screen-hidden-print-copy {
+    display: block;
+  }
+
+  .print-area:not(.screen-hidden-print-copy) {
+    display: none;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-area,
+  .print-area * {
+    visibility: visible;
+  }
+
+  .print-area {
+    position: absolute;
+    inset: 0;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+}

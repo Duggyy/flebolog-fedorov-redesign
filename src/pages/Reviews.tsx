@@ -1,35 +1,110 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import SiteHeader from "@/components/SiteHeader";
 import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import { Link } from "react-router-dom";
 
-const reviews = [
+type ProDoctorovReview = {
+  name: string;
+  date: string;
+  rating: string;
+  speciality: string;
+  text: string;
+};
+
+type ReviewsPayload = {
+  source: string;
+  isCached?: boolean;
+  cachedAt?: string | null;
+  reviews: ProDoctorovReview[];
+};
+
+const fallbackReviews: ProDoctorovReview[] = [
   {
-    name: "Амелюшкина Ольга Александровна",
-    text: "Выражаю благодарность Дмитрию Анатольевичу за проведенную операцию (ЭВЛК)! С первой встречи доктор располагает к себе, очень внимателен!"
+    name: "Пациент +7 916 52XXXXX",
+    date: "9 января 2026 в 15:10",
+    rating: "5.0 Отлично",
+    speciality: "Флеболог",
+    text: "17.12.25 проводилась ЭВЛК. От всего сердца я хочу поблагодарить Дмитрия Анатольевича за чуткое отношение, профессионализм и качественную помощь в лечении."
   },
   {
-    name: "Каткова Татьяна Александровна",
-    text: "Прошло четыре года после ЭВЛК. Ноги после лечения не узнать! Главное, что вены проходимы, что ноги не устают. Спасибо доктору Д.А. Федорову!"
+    name: "Пациент +7 919 03XXXXX",
+    date: "14 ноября 2025 в 23:03",
+    rating: "5.0 Отлично",
+    speciality: "Сосудистый хирург (ангиохирург)",
+    text: "Хочу выразить огромную благодарность и восхищение доктору Дмитрию Анатольевичу Федорову за блестяще проведенную операцию ЭВЛК по удалению варикозной вены на ноге."
   },
   {
-    name: "Пылаева Марина Васильевна",
-    text: "Он врач от БОГА, ему не страшно доверить свою жизнь. Большое ему человеческое СПАСИБО за внимательное и трепетное отношение к пациентам и огромный ПРОФЕССИОНАЛИЗМ."
+    name: "Пациент +7 903 73XXXXX",
+    date: "22 октября 2025 в 15:11",
+    rating: "5.0 Отлично",
+    speciality: "",
+    text: "Был варикоз, болезненное ощущение в ноге, нашла доктора по отзывам на сайте и не пожалела. Хороший доктор, помог справиться с проблемой."
   },
   {
-    name: "Александр Кобылецкий",
-    text: "Осмотр через неделю после операции показал, что всё получилось с первого раза, вена спаялась по всей длине, заживает всё хорошо. Дмитрию Анатольевичу большое спасибо!"
+    name: "Пациент +7 968 66XXXXX",
+    date: "17 июня 2025 в 11:07",
+    rating: "5.0 Отлично",
+    speciality: "",
+    text: "Доктор Дмитрий Анатольевич очень хороший специалист с золотыми руками. Провел мне операцию блестяще. Рекомендую всем, кто хочет забыть, что такое варикозное расширение вен."
   }
 ];
 
 const Reviews = () => {
+  const [reviews, setReviews] = useState<ProDoctorovReview[]>(fallbackReviews);
+  const [reviewsSource, setReviewsSource] = useState("fallback");
+  const [reviewsUpdatedAt, setReviewsUpdatedAt] = useState<string | null>(null);
+
   useEffect(() => {
     const script = document.createElement("script");
     script.src = "https://prodoctorov.ru/static/js/widget_footer.js?v06";
     script.defer = true;
     script.async = true;
     document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadReviews = async () => {
+      try {
+        const response = await fetch("/api/prodoctorov-reviews.php", { cache: "no-store" });
+        if (!response.ok) throw new Error("reviews_api_unavailable");
+        const payload = (await response.json()) as ReviewsPayload;
+        if (!Array.isArray(payload.reviews) || payload.reviews.length === 0) {
+          throw new Error("reviews_api_empty");
+        }
+        if (!cancelled) {
+          setReviews(payload.reviews.slice(0, 4));
+          setReviewsSource(payload.isCached ? "cache" : payload.source);
+          setReviewsUpdatedAt(payload.cachedAt ?? null);
+        }
+        return;
+      } catch {
+        try {
+          const response = await fetch("/data/prodoctorov-reviews-fallback.json", { cache: "no-store" });
+          if (!response.ok) throw new Error("reviews_fallback_unavailable");
+          const payload = (await response.json()) as ReviewsPayload;
+          if (!cancelled && Array.isArray(payload.reviews) && payload.reviews.length > 0) {
+            setReviews(payload.reviews.slice(0, 4));
+            setReviewsSource("fallback");
+            setReviewsUpdatedAt(payload.cachedAt ?? null);
+          }
+        } catch {
+          if (!cancelled) {
+            setReviews(fallbackReviews);
+            setReviewsSource("fallback");
+            setReviewsUpdatedAt(null);
+          }
+        }
+      }
+    };
+
+    loadReviews();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -84,9 +159,19 @@ const Reviews = () => {
         </div>
       </section>
 
-      {/* Local Reviews - as before */}
+      {/* Latest ProDoctorov reviews */}
       <section className="py-20">
         <div className="container max-w-4xl">
+          <div className="mb-8 flex flex-col justify-between gap-3 md:flex-row md:items-end">
+            <div>
+              <p className="text-secondary text-sm font-semibold uppercase tracking-widest mb-2">ПроДокторов</p>
+              <h2 className="text-3xl font-bold text-foreground">Последние отзывы пациентов</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {reviewsSource === "prodoctorov" ? "Обновлено при загрузке страницы" : "Показаны последние сохраненные отзывы"}
+              {reviewsUpdatedAt ? ` · ${new Date(reviewsUpdatedAt).toLocaleDateString("ru-RU")}` : ""}
+            </p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {reviews.map((r, i) =>
               <div key={i} className="bg-white rounded-xl p-6 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] relative">
@@ -98,7 +183,9 @@ const Reviews = () => {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-foreground">{r.name}</p>
-                    <p className="text-xs text-muted-foreground">Пациент</p>
+                    <p className="text-xs text-muted-foreground">
+                      {[r.date, r.rating, r.speciality].filter(Boolean).join(" · ")}
+                    </p>
                   </div>
                 </div>
               </div>

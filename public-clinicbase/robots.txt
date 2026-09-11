@@ -1,0 +1,3 @@
+User-agent: *
+Disallow: /doctor-db
+Disallow: /doctor-admin
