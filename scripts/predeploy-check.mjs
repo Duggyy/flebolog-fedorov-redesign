@@ -20,6 +20,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { findUnreachableAssets } from "./lib/asset-graph.mjs";
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -119,39 +120,22 @@ if (!fs.existsSync(indexPath)) {
 }
 
 // --------------------------------------------------------------------------
-// 3b. Устаревшие бандлы от прошлых сборок
-//    Сборка может не суметь очистить assets/ (защита от массового удаления).
-//    Тогда там остаются бандлы прошлых сборок. Они безвредны, но незачем
-//    выкладывать — считаем «нулевыми» те, на которые никто не ссылается.
+// 3b. Остатки прошлых сборок
+//    Сборка может не суметь удалить лишнее (защита от массового удаления).
+//    Считаем достижимость от index.html: файл нужен, если на него ссылается
+//    index.html или любой достижимый файл. Простой поиск «на кого никто не
+//    ссылается» здесь не работает — см. scripts/lib/asset-graph.mjs.
 // --------------------------------------------------------------------------
-const assetsDir = path.join(distDir, "assets");
-if (fs.existsSync(assetsDir) && fs.existsSync(indexPath)) {
-  const assetFiles = fs.readdirSync(assetsDir).filter((f) => fs.statSync(path.join(assetsDir, f)).isFile());
-  const htmlContent = fs.readFileSync(indexPath, "utf8");
+const { all: assetFiles, reachable, stale } = findUnreachableAssets(distDir);
 
-  // Для каждого JS/CSS храним его содержимое, чтобы исключить самоссылку:
-  // имя файла внутри него самого не считается использованием.
-  const codeContents = new Map(
-    assetFiles
-      .filter((f) => /\.(js|css)$/.test(f))
-      .map((f) => [f, fs.readFileSync(path.join(assetsDir, f), "utf8")]),
-  );
-
-  const orphans = assetFiles.filter((name) => {
-    const others = [...codeContents.entries()]
-      .filter(([file]) => file !== name)
-      .map(([, content]) => content)
-      .join("\n");
-    return !htmlContent.includes(name) && !others.includes(name);
-  });
-
-  if (orphans.length === 0) {
-    ok("в assets/ нет брошенных файлов", `${assetFiles.length} шт.`);
+if (assetFiles.length) {
+  if (stale.length === 0) {
+    ok("в assets/ нет остатков прошлых сборок", `${assetFiles.length} шт.`);
   } else {
     warn(
-      `в assets/ ${orphans.length} файл(ов), на которые никто не ссылается`,
-      `${orphans.slice(0, 3).join(", ")}${orphans.length > 3 ? " …" : ""} — остатки прошлых сборок; ` +
-        `выкладывать не нужно, убрать: npm run dist:clean && npm run build:site`,
+      `в assets/ ${stale.length} файл(ов) от прошлых сборок`,
+      `${stale.slice(0, 3).join(", ")}${stale.length > 3 ? " …" : ""} — нужны только ${reachable.length} из ${assetFiles.length}; ` +
+        `выкладывать их не нужно, убрать: npm run dist:clean`,
     );
   }
 }
