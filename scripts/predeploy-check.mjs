@@ -119,6 +119,44 @@ if (!fs.existsSync(indexPath)) {
 }
 
 // --------------------------------------------------------------------------
+// 3b. Устаревшие бандлы от прошлых сборок
+//    Сборка может не суметь очистить assets/ (защита от массового удаления).
+//    Тогда там остаются бандлы прошлых сборок. Они безвредны, но незачем
+//    выкладывать — считаем «нулевыми» те, на которые никто не ссылается.
+// --------------------------------------------------------------------------
+const assetsDir = path.join(distDir, "assets");
+if (fs.existsSync(assetsDir) && fs.existsSync(indexPath)) {
+  const assetFiles = fs.readdirSync(assetsDir).filter((f) => fs.statSync(path.join(assetsDir, f)).isFile());
+  const htmlContent = fs.readFileSync(indexPath, "utf8");
+
+  // Для каждого JS/CSS храним его содержимое, чтобы исключить самоссылку:
+  // имя файла внутри него самого не считается использованием.
+  const codeContents = new Map(
+    assetFiles
+      .filter((f) => /\.(js|css)$/.test(f))
+      .map((f) => [f, fs.readFileSync(path.join(assetsDir, f), "utf8")]),
+  );
+
+  const orphans = assetFiles.filter((name) => {
+    const others = [...codeContents.entries()]
+      .filter(([file]) => file !== name)
+      .map(([, content]) => content)
+      .join("\n");
+    return !htmlContent.includes(name) && !others.includes(name);
+  });
+
+  if (orphans.length === 0) {
+    ok("в assets/ нет брошенных файлов", `${assetFiles.length} шт.`);
+  } else {
+    warn(
+      `в assets/ ${orphans.length} файл(ов), на которые никто не ссылается`,
+      `${orphans.slice(0, 3).join(", ")}${orphans.length > 3 ? " …" : ""} — остатки прошлых сборок; ` +
+        `выкладывать не нужно, убрать: npm run dist:clean && npm run build:site`,
+    );
+  }
+}
+
+// --------------------------------------------------------------------------
 // 4. Обязательные файлы
 // --------------------------------------------------------------------------
 const siteRequired = [

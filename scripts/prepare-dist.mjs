@@ -14,6 +14,15 @@
  * Что НИКОГДА не удаляется: images/, videos/, robots.txt, sitemap.xml,
  *   placeholder.svg, .htaccess и любой другой файл.
  *
+ * ⚠️ Очистка — best-effort. В окружении агента защита от массового удаления
+ *   считает удалённые файлы накопительно за один сеанс (порог 50): первая
+ *   сборка чистит нормально, вторая-третья может упереться в лимит. Раньше
+ *   скрипт падал — и сборка обрывалась, оставляя dist полуразрушенным
+ *   (assets/ уже удалён, index.html ссылается на несуществующие бандлы).
+ *   Теперь при блокировке скрипт предупреждает и продолжает: сборка
+ *   выполняется, index.html перезаписывается, старые бандлы просто остаются
+ *   лежать в assets/ и на работоспособность не влияют.
+ *
  * Флаги: --dry-run (только показать), --out <dir> (другая папка сборки).
  */
 import fs from "node:fs";
@@ -50,6 +59,7 @@ if (!fs.existsSync(outDir)) {
 }
 
 let removed = 0;
+let skipped = 0;
 
 for (const name of REMOVABLE) {
   if (PROTECTED.has(name)) {
@@ -67,11 +77,27 @@ for (const name of REMOVABLE) {
     continue;
   }
 
-  fs.rmSync(target, { recursive: true, force: true });
-  console.log(`prepare-dist: удалено ${relative}`);
-  removed += 1;
+  try {
+    fs.rmSync(target, { recursive: true, force: true });
+    console.log(`prepare-dist: удалено ${relative}`);
+    removed += 1;
+  } catch (error) {
+    // Блокировка защиты от массового удаления (или иная ошибка ФС) не должна
+    // ронять сборку: лучше лишние старые файлы в assets/, чем нерабочий dist.
+    skipped += 1;
+    const reason = /BULK_CONFIRM_REQUIRED/.test(String(error))
+      ? "сработала защита от массового удаления"
+      : String(error.message || error).split("\n")[0];
+    console.warn(`prepare-dist: НЕ удалось очистить ${relative} (${reason}) — продолжаю сборку`);
+    console.warn(
+      "prepare-dist: старые бандлы останутся в assets/, работоспособности не мешают; " +
+        "убрать их можно вручную: npm run dist:clean && npm run build:site",
+    );
+  }
 }
 
 console.log(
-  `prepare-dist: ${dryRun ? "к удалению" : "удалено"} ${removed} объект(ов); медиатека (images/, videos/) не затронута`,
+  `prepare-dist: ${dryRun ? "к удалению" : "удалено"} ${removed} объект(ов)` +
+    (skipped ? `, пропущено ${skipped}` : "") +
+    "; медиатека (images/, videos/) не затронута",
 );
