@@ -8,7 +8,7 @@
  *
  * Базовый адрес: переменная окружения SITE_URL, иначе https://dafedorov.ru
  */
-import { readFileSync, writeFileSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -17,15 +17,19 @@ const SITE_URL = (process.env.SITE_URL || "https://dafedorov.ru").replace(/\/+$/
 
 const read = (rel) => readFileSync(path.join(root, rel), "utf8");
 
-/** Даты изменения исходников — честный lastmod, без выдуманных значений. */
-const lastmodOf = (rel) => {
-  try {
-    return statSync(path.join(root, rel)).mtime.toISOString().slice(0, 10);
-  } catch {
-    return null;
-  }
-};
-
+/**
+ * lastmod берём из САМОГО МАТЕРИАЛА (поле `date`, дд.мм.гггг → ISO), а не из
+ * времени изменения файла.
+ *
+ * ⚠️ Почему не mtime файла: mtime меняется от любой правки файла (поправил одну
+ * публикацию — «изменились» все 10) и от самого `git clone` (после свежего
+ * клона все даты становятся сегодняшними). Карта сайта начинала врать про
+ * изменение всех страниц при каждой сборке, и поисковики перестают доверять
+ * lastmod. Дата публикации стабильна и честна: тексты материалов статичны.
+ *
+ * Если у материала даты нет — lastmod НЕ выводим вовсе: отсутствующий тег
+ * лучше выдуманного.
+ */
 const DATA = {
   news: "src/components/news-data.ts",
   blog: "src/components/blog-data.ts",
@@ -35,7 +39,7 @@ const DATA = {
 
 const unique = (list) => [...new Set(list)];
 
-// --- слаги из данных ---------------------------------------------------------
+/** Слаги из данных (для файлов без разбора на объекты). */
 const slugs = (file, pattern) => {
   const src = read(file);
   const found = [...src.matchAll(pattern)].map((m) => m[1]);
@@ -43,10 +47,38 @@ const slugs = (file, pattern) => {
   return unique(found);
 };
 
-const newsSlugs = slugs(DATA.news, /slug:\s*"([^"]+)"/g);
-const blogSlugs = slugs(DATA.blog, /slug:\s*"([^"]+)"/g);
+/**
+ * Разбирает файл данных на объекты-материалы и достаёт пару (slug, дата).
+ * Объекты закрываются ровно двумя пробелами и `},` — вложенные блоки глубже,
+ * поэтому разделение по `\n  },\n` не рвёт материалы.
+ */
+const parseItems = (file) => {
+  const src = read(file);
+  const items = src.split(/\n  \},\n/).flatMap((chunk) => {
+    const slug = chunk.match(/slug:\s*"([^"]+)"/);
+    if (!slug) return [];
+    const date = chunk.match(/date:\s*"(\d{2})\.(\d{2})\.(\d{4})"/);
+    return [{ slug: slug[1], date: date ? `${date[3]}-${date[2]}-${date[1]}` : null }];
+  });
+  if (!items.length) throw new Error(`Не удалось разобрать материалы в ${file}`);
+  return items;
+};
+
+const newsItems = parseItems(DATA.news);
+const blogItems = parseItems(DATA.blog);
 const albumSlugs = slugs(DATA.conferences, /makeAlbum\(\s*"([^"]+)"/g);
 const methodSlugs = slugs(DATA.methods, /slug:\s*"([^"]+)"/g);
+
+// Материал без даты — не молчаливая потеря lastmod, а повод сказать об этом.
+for (const [label, items] of [
+  ["новостей", newsItems],
+  ["блога", blogItems],
+]) {
+  const withoutDate = items.filter((i) => !i.date).map((i) => i.slug);
+  if (withoutDate.length) {
+    console.warn(`sitemap.xml: у ${withoutDate.length} материал(ов) ${label} нет даты, lastmod не выводится: ${withoutDate.join(", ")}`);
+  }
+}
 
 // --- статические маршруты ----------------------------------------------------
 const staticRoutes = [
@@ -68,18 +100,11 @@ const staticRoutes = [
 
 const entries = [
   ...staticRoutes.map((route) => ({ loc: route, lastmod: null, priority: route === "/" ? "1.0" : "0.8" })),
-  ...newsSlugs.map((s) => ({ loc: `/news/${s}`, lastmod: lastmodOf(DATA.news), priority: "0.6" })),
-  ...blogSlugs.map((s) => ({ loc: `/blog/${s}`, lastmod: lastmodOf(DATA.blog), priority: "0.6" })),
-  ...albumSlugs.map((s) => ({
-    loc: `/conference-photos/${s}`,
-    lastmod: lastmodOf(DATA.conferences),
-    priority: "0.5",
-  })),
-  ...methodSlugs.map((s) => ({
-    loc: `/methods/${s}`,
-    lastmod: lastmodOf(DATA.methods),
-    priority: "0.7",
-  })),
+  ...newsItems.map(({ slug, date }) => ({ loc: `/news/${slug}`, lastmod: date, priority: "0.6" })),
+  ...blogItems.map(({ slug, date }) => ({ loc: `/blog/${slug}`, lastmod: date, priority: "0.6" })),
+  // У альбомов и страниц методов даты публикации нет — lastmod не выводим.
+  ...albumSlugs.map((s) => ({ loc: `/conference-photos/${s}`, lastmod: null, priority: "0.5" })),
+  ...methodSlugs.map((s) => ({ loc: `/methods/${s}`, lastmod: null, priority: "0.7" })),
 ];
 
 const escapeXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -100,5 +125,5 @@ ${entries
 const out = path.join(root, "public/sitemap.xml");
 writeFileSync(out, xml, "utf8");
 console.log(
-  `sitemap.xml: ${entries.length} URL (${staticRoutes.length} статических, ${newsSlugs.length} новостей, ${blogSlugs.length} блога, ${albumSlugs.length} альбомов, ${methodSlugs.length} методов) -> ${SITE_URL}`,
+  `sitemap.xml: ${entries.length} URL (${staticRoutes.length} статических, ${newsItems.length} новостей, ${blogItems.length} блога, ${albumSlugs.length} альбомов, ${methodSlugs.length} методов) -> ${SITE_URL}`,
 );
