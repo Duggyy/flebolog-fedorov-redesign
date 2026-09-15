@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAnalytics } from "@/hooks/use-analytics";
+import RouteMeta from "@/components/RouteMeta";
 import { methodCards, methodPath } from "@/components/methods-cards";
 
 // Home page stays eager: it is the LCP entry point and must not wait on a chunk.
@@ -50,6 +51,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Analytics />
+        {/* Заголовок вкладки и description под текущий маршрут: без него все
+            страницы SPA отдают один и тот же <title> из index.html. */}
+        <RouteMeta />
         <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/" element={<Index />} />
