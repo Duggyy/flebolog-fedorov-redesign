@@ -11,6 +11,7 @@
     "build:site": "npm run sitemap && vite build --config vite.site.config.ts",
     "sitemap": "node scripts/generate-sitemap.mjs",
     "reviews:refresh": "node scripts/refresh-prodoctorov-reviews.mjs",
+    "photos:sync": "node scripts/sync-conference-photos.mjs",
     "build:clinicbase": "vite build --config vite.clinicbase.config.ts && node scripts/inline-clinicbase-css.mjs && mv dist-clinicbase/clinicbase.html dist-clinicbase/index.html",
     "build:all": "npm run build:site && npm run build:clinicbase",
     "build:dev": "vite build --mode development",

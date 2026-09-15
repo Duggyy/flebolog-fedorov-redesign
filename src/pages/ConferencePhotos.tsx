@@ -1,10 +1,22 @@
 import { Link, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Images, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type SyntheticEvent } from "react";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import SiteNav from "@/components/SiteNav";
 import { conferenceAlbums } from "@/components/conference-gallery-data";
+
+/**
+ * Если картинка не загрузилась (файла нет, обрыв связи), подставляем запасной
+ * источник: в сетке — полноразмерное фото вместо миниатюры, в лайтбоксе —
+ * миниатюру вместо полного. Срабатывает один раз, чтобы не зациклиться.
+ */
+const handleImageError = (event: SyntheticEvent<HTMLImageElement>, fallback: string) => {
+  const image = event.currentTarget;
+  if (image.dataset.fallbackApplied === "true") return;
+  image.dataset.fallbackApplied = "true";
+  image.src = fallback;
+};
 
 const ConferencePhotos = () => {
   const { slug } = useParams();
@@ -94,6 +106,7 @@ const ConferencePhotos = () => {
                         height="450"
                         loading="lazy"
                         decoding="async"
+                        onError={(event) => handleImageError(event, photo.full)}
                         className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                       />
                     </span>
@@ -150,6 +163,7 @@ const ConferencePhotos = () => {
               <img
                 src={current.full}
                 alt={current.alt}
+                onError={(event) => handleImageError(event, current.thumb)}
                 className="max-h-[82vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
               />
               <figcaption className="text-sm text-white/70">
@@ -199,6 +213,7 @@ const ConferencePhotos = () => {
                       height="375"
                       loading="lazy"
                       decoding="async"
+                      onError={(event) => handleImageError(event, item.photos[0].full)}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                   </div>
