@@ -1,5 +1,6 @@
 import SiteHeader from "@/components/SiteHeader";
 import SiteNav from "@/components/SiteNav";
+import StoriesRow from "@/components/StoriesRow";
 import HeroSection from "@/components/HeroSection";
 import TreatmentSection from "@/components/TreatmentSection";
 import SiteFooter from "@/components/SiteFooter";
@@ -10,6 +11,7 @@ const Index = () => {
   <SiteHeader />
   <SiteNav />
   <main className="flex-1">
+    <StoriesRow />
     <HeroSection />
     <TreatmentSection />
   </main>
