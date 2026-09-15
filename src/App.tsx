@@ -5,6 +5,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAnalytics } from "@/hooks/use-analytics";
+import { methodCards, methodPath } from "@/components/methods-cards";
 
 // Home page stays eager: it is the LCP entry point and must not wait on a chunk.
 import Index from "./pages/Index.tsx";
@@ -20,6 +21,7 @@ const VarikozPage = lazy(() => import("./pages/VarikozPage.tsx"));
 const TromboflebitPage = lazy(() => import("./pages/TromboflebitPage.tsx"));
 const ZvezdochkiPage = lazy(() => import("./pages/ZvezdochkiPage.tsx"));
 const YazvyPage = lazy(() => import("./pages/YazvyPage.tsx"));
+const MethodPage = lazy(() => import("./pages/MethodPage.tsx"));
 const ConferencePhotos = lazy(() => import("./pages/ConferencePhotos.tsx"));
 const Colleagues = lazy(() => import("./pages/Colleagues.tsx"));
 const Reports = lazy(() => import("./pages/Reports.tsx"));
@@ -60,6 +62,16 @@ const App = () => (
             <Route path="/tromboflebit" element={<TromboflebitPage />} />
             <Route path="/zvezdochki" element={<ZvezdochkiPage />} />
             <Route path="/yazvy" element={<YazvyPage />} />
+            {/* Методы лечения из блока «Как мы лечим». Список маршрутов берётся
+                из маленького methods-cards.ts, поэтому тяжёлый methods-data.ts
+                попадает только в ленивый чанк MethodPage. */}
+            {methodCards.map((method) => (
+              <Route
+                key={method.slug}
+                path={methodPath(method.slug)}
+                element={<MethodPage slug={method.slug} />}
+              />
+            ))}
             <Route path="/conference-photos" element={<ConferencePhotos />} />
             <Route path="/conference-photos/:slug" element={<ConferencePhotos />} />
             <Route path="/colleagues" element={<Colleagues />} />

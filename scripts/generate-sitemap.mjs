@@ -30,6 +30,7 @@ const DATA = {
   news: "src/components/news-data.ts",
   blog: "src/components/blog-data.ts",
   conferences: "src/components/conference-gallery-data.ts",
+  methods: "src/components/methods-data.ts",
 };
 
 const unique = (list) => [...new Set(list)];
@@ -45,6 +46,7 @@ const slugs = (file, pattern) => {
 const newsSlugs = slugs(DATA.news, /slug:\s*"([^"]+)"/g);
 const blogSlugs = slugs(DATA.blog, /slug:\s*"([^"]+)"/g);
 const albumSlugs = slugs(DATA.conferences, /makeAlbum\(\s*"([^"]+)"/g);
+const methodSlugs = slugs(DATA.methods, /slug:\s*"([^"]+)"/g);
 
 // --- статические маршруты ----------------------------------------------------
 const staticRoutes = [
@@ -73,6 +75,11 @@ const entries = [
     lastmod: lastmodOf(DATA.conferences),
     priority: "0.5",
   })),
+  ...methodSlugs.map((s) => ({
+    loc: `/methods/${s}`,
+    lastmod: lastmodOf(DATA.methods),
+    priority: "0.7",
+  })),
 ];
 
 const escapeXml = (s) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -93,5 +100,5 @@ ${entries
 const out = path.join(root, "public/sitemap.xml");
 writeFileSync(out, xml, "utf8");
 console.log(
-  `sitemap.xml: ${entries.length} URL (${staticRoutes.length} статических, ${newsSlugs.length} новостей, ${blogSlugs.length} блога, ${albumSlugs.length} альбомов) -> ${SITE_URL}`,
+  `sitemap.xml: ${entries.length} URL (${staticRoutes.length} статических, ${newsSlugs.length} новостей, ${blogSlugs.length} блога, ${albumSlugs.length} альбомов, ${methodSlugs.length} методов) -> ${SITE_URL}`,
 );

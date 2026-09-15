@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Syringe, Zap, Scissors, Sparkles, X } from "lucide-react";
+import { Syringe, X } from "lucide-react";
 import { treatmentResultsData } from "@/components/treatment-results-data";
+import { methodCards, methodPath } from "@/components/methods-cards";
 
 const tabs = [
 "Направления лечения",
@@ -19,14 +20,6 @@ const conditions = [
 { icon: Syringe, label: "Тромбофлебит", path: "/tromboflebit" },
 { icon: Syringe, label: "Сосудистые звездочки", path: "/zvezdochki" },
 { icon: Syringe, label: "Трофические язвы", path: "/yazvy" }
-];
-
-const methods = [
-  { icon: Zap, label: "Склеротерапия", desc: "лечение вен без операции", bg: "/images/method-microsklerotherapy.jpg" },
-{ icon: Zap, label: "Лечение варикоза лазером", desc: "ЭВЛК", bg: "/images/method-laser.png" },
-{ icon: Scissors, label: "Малоинвазивные операции на венах", desc: "", bg: "/images/method-operacii.png" },
-{ icon: Sparkles, label: "Удаление сосудистых звездочек", desc: "", bg: "/images/method-zvezdochki.png" },
-{ icon: Sparkles, label: "Микросклеротерапия", desc: "", bg: "/images/method-microsklerotherapy.jpg" }
 ];
 
 const TreatmentSection = () => {
@@ -101,34 +94,24 @@ const MethodsContent = () =>
 
     <h3 className="text-lg font-bold text-foreground mb-4">Как мы лечим?</h3>
     <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
-      {methods.map((m) =>
-    <div
-      key={m.label}
-      className="relative rounded-xl text-center shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] hover:shadow-[0_4px_20px_-4px_hsl(220_15%_50%/0.16)] transition-shadow cursor-pointer active:scale-[0.98] overflow-hidden min-h-[180px] flex items-end">
-      
-          {'bg' in m && m.bg ?
-      <>
-              <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{ backgroundImage: `url(${m.bg})` }} />
-        
-              
-              <div className="relative z-10 w-full h-full flex flex-col items-center justify-center p-5">
-                <p className="text-xl font-bold text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] leading-tight tracking-tight">{m.label}</p>
-                {m.desc && <p className="text-lg font-semibold text-white/95 mt-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">{m.desc}</p>}
-              </div>
-            </> :
+      {methodCards.map((m) =>
+        <Link
+          key={m.slug}
+          to={methodPath(m.slug)}
+          aria-label={`${m.label} — подробнее о методе`}
+          className="group relative rounded-xl text-center shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] hover:shadow-[0_4px_20px_-4px_hsl(220_15%_50%/0.16)] transition-shadow active:scale-[0.98] overflow-hidden min-h-[180px] flex items-end"
+        >
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{ backgroundImage: `url(${m.image})` }} />
+          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors" />
 
-      <div className="relative z-10 w-full p-5 bg-white flex flex-col items-center justify-center min-h-[180px]">
-              <div className="bg-secondary/10 rounded-lg p-3 w-fit mx-auto mb-3">
-                <m.icon className="h-6 w-6 text-secondary" />
-              </div>
-              <p className="text-sm font-bold text-foreground">{m.label}</p>
-              {m.desc && <p className="text-xs text-muted-foreground mt-1">{m.desc}</p>}
-            </div>
-      }
-        </div>
-    )}
+          <div className="relative z-10 w-full h-full flex flex-col items-center justify-center p-5">
+            <p className="text-xl font-bold text-white drop-shadow-[0_4px_8px_rgba(0,0,0,0.8)] leading-tight tracking-tight">{m.label}</p>
+            {m.desc && <p className="text-lg font-semibold text-white/95 mt-1 drop-shadow-[0_2px_4px_rgba(0,0,0,0.7)]">{m.desc}</p>}
+          </div>
+        </Link>
+      )}
     </div>
 
     <div className="mt-10 bg-white rounded-xl p-6 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)]">
