@@ -8,7 +8,7 @@
     "dev:site": "vite --config vite.site.config.ts",
     "dev:clinicbase": "vite --config vite.clinicbase.config.ts",
     "build": "npm run build:all",
-    "build:site": "npm run sitemap && vite build --config vite.site.config.ts",
+    "build:site": "npm run sitemap && node scripts/prepare-dist.mjs && vite build --config vite.site.config.ts",
     "sitemap": "node scripts/generate-sitemap.mjs",
     "reviews:refresh": "node scripts/refresh-prodoctorov-reviews.mjs",
     "photos:sync": "node scripts/sync-conference-photos.mjs",

@@ -18,5 +18,10 @@ export default defineConfig(() => ({
   },
   build: {
     outDir: "dist-dafedorov",
+    // dist-dafedorov содержит не только артефакты Vite, но и всю медиатеку
+    // (images/ ~600 файлов, videos/). Полная очистка папки их сносит, поэтому
+    // выключаем emptyOutDir, а устаревшие бандлы убирает scripts/prepare-dist.mjs
+    // (запускается в build:site перед vite build).
+    emptyOutDir: false,
   },
 }));
