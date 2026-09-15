@@ -13,6 +13,7 @@
     "reviews:refresh": "node scripts/refresh-prodoctorov-reviews.mjs",
     "photos:sync": "node scripts/sync-conference-photos.mjs",
     "check:deploy": "node scripts/predeploy-check.mjs",
+    "audit:links": "node scripts/audit-links.mjs",
     "dist:clean": "node scripts/prepare-dist.mjs",
     "build:clinicbase": "node scripts/prepare-dist.mjs --out dist-clinicbase && vite build --config vite.clinicbase.config.ts && node scripts/inline-clinicbase-css.mjs && mv dist-clinicbase/clinicbase.html dist-clinicbase/index.html && node scripts/stamp-build.mjs --dist dist-clinicbase --app clinicbase",
     "build:all": "npm run build:site && npm run build:clinicbase",

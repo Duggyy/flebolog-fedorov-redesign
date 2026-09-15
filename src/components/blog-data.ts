@@ -216,7 +216,7 @@ export const blogPosts: BlogPost[] = [
     kicker: "доктор лазер",
     anons: "Как убрать варикозные вены без следа, боли и тяжёлой операции? Рассказывает кандидат медицинских наук, врачфлеболог, ведущий специалист медцентров «Ниармедик-Обнинск» (Обнинск) и «Медицинский инновационный флебологический центр» (Москва) Дмитрий ФЁДОРОВ.",
     cover: "/images/blog/vo-fryazine-sozdali-unikalnyy-pribor/cover.jpg",
-    pdf: "/ext_images/1029/img_4a7a47af8e75f2631e7dae6ef6da9af3",
+    pdf: "/docs/blog/vo-fryazine-sozdali-unikalnyy-pribor.pdf",
     blocks: [
       { type: "image", src: "/images/blog/vo-fryazine-sozdali-unikalnyy-pribor/photo-01.jpg", thumb: "/images/blog/vo-fryazine-sozdali-unikalnyy-pribor/photo-01.jpg" },
     ],
