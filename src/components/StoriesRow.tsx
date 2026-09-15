@@ -95,10 +95,12 @@ const StoriesRow = () => {
     <>
       <section className="bg-white py-5 border-b border-border">
         <div className="container">
-          <div className="flex items-center justify-between mb-3.5">
-            <h2 className="text-lg font-bold text-foreground">Сториз</h2>
+          {/* На узком экране заголовок и подпись не помещаются в строку и рвутся
+              по слогам, поэтому там подпись уходит под заголовок. */}
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-3 mb-3.5">
+            <h2 className="text-lg font-bold text-foreground whitespace-nowrap">Короткие видео</h2>
             <span className="text-xs text-muted-foreground">
-              {stories.length} видео · без звука, с субтитрами
+              {stories.length} роликов · без звука, с субтитрами
             </span>
           </div>
 
