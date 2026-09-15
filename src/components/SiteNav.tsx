@@ -11,6 +11,10 @@ const navItems = [
 const SiteNav = () => {
   const location = useLocation();
 
+  // Keep the section tab highlighted on its sub-pages (e.g. /news/<slug>).
+  const isActive = (path: string) =>
+    path === "/" ? location.pathname === "/" : location.pathname === path || location.pathname.startsWith(`${path}/`);
+
   return (
     <nav className="bg-white border-b border-border shadow-sm">
       <div className="container">
@@ -20,7 +24,7 @@ const SiteNav = () => {
               <Link
                 to={item.path}
                 className={`inline-block px-3 sm:px-4 py-3.5 text-xs sm:text-sm font-medium transition-colors whitespace-nowrap flex-shrink-0 ${
-                  location.pathname === item.path
+                  isActive(item.path)
                     ? 'text-primary border-b-2 border-primary bg-primary/5'
                     : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                 }`}

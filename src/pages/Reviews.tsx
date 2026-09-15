@@ -10,93 +10,164 @@ type ProDoctorovReview = {
   rating: string;
   speciality: string;
   text: string;
+  publishedAt?: string;
+};
+
+type ProDoctorovRating = {
+  stars: number;
+  totalRates: number;
+  bestQuote?: string;
+  profileUrl?: string;
 };
 
 type ReviewsPayload = {
-  source: string;
+  source?: string;
   isCached?: boolean;
   cachedAt?: string | null;
-  reviews: ProDoctorovReview[];
+  rating?: ProDoctorovRating | null;
+  reviews?: ProDoctorovReview[];
 };
 
+const PRODOCTOROV_PROFILE_URL = "https://prodoctorov.ru/obninsk/vrach/556844-fedorov/#otzivi";
+
+/** Русское склонение: 1 оценка, 2 оценки, 5 оценок. */
+const plural = (count: number, one: string, few: string, many: string) => {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+};
+
+const Stars = ({ value }: { value: number }) => (
+  <span className="flex items-center gap-0.5" role="img" aria-label={`Рейтинг ${value.toFixed(1)} из 5`}>
+    {[0, 1, 2, 3, 4].map((index) => (
+      <svg key={index} viewBox="0 0 20 20" className="h-4 w-4" aria-hidden="true">
+        <path
+          d="M10 1.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8L1.5 7.7l5.9-.9z"
+          fill={index < Math.round(value) ? "#F5A623" : "#E2E5EA"}
+        />
+      </svg>
+    ))}
+  </span>
+);
+
+/**
+ * ПроДокторов закрывает страницы врача JS-защитой от ботов (ServicePipe) и не
+ * отдаёт публичного API со списком отзывов. Поэтому ни браузер, ни серверный
+ * запрос не могут прочитать отзывы «вживую»: скрипт
+ * scripts/refresh-prodoctorov-reviews.mjs раз в сутки перезаписывает
+ * /data/prodoctorov-reviews.json, а страница просто берёт самый свежий
+ * доступный снимок.
+ *
+ * Источники перебираются по порядку — каждый следующий нужен только если
+ * предыдущий недоступен. Если не ответил ни один, на экране остаются ранее
+ * загруженные отзывы (встроенный список), а не пустой блок.
+ */
+const REVIEWS_SOURCES = [
+  "/data/prodoctorov-reviews.json",
+  "/api/prodoctorov-reviews.php",
+  "/data/prodoctorov-reviews-fallback.json",
+] as const;
+
+const REQUEST_TIMEOUT_MS = 8000;
+
+const fetchReviews = async (url: string) => {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, { cache: "no-store", signal: controller.signal });
+    if (!response.ok) throw new Error(`reviews_source_${response.status}`);
+
+    const payload = (await response.json()) as ReviewsPayload;
+    if (!Array.isArray(payload.reviews) || payload.reviews.length === 0) {
+      throw new Error("reviews_source_empty");
+    }
+
+    return {
+      reviews: payload.reviews.slice(0, 4),
+      cachedAt: payload.cachedAt ?? null,
+      rating: payload.rating ?? null,
+    };
+  } finally {
+    window.clearTimeout(timer);
+  }
+};
+
+/**
+ * Последний рубеж: показывается, только если не ответил ни один источник выше.
+ * Актуальный снимок живёт в /data/prodoctorov-reviews.json — этот список нужен
+ * лишь чтобы блок отзывов никогда не оказался пустым.
+ */
 const fallbackReviews: ProDoctorovReview[] = [
   {
-    name: "Пациент +7 916 52XXXXX",
-    date: "9 января 2026 в 15:10",
+    name: "Пациент +7 914 20XXXXX",
+    date: "4 июня 2026 в 13:54",
     rating: "5.0 Отлично",
     speciality: "Флеболог",
-    text: "17.12.25 проводилась ЭВЛК. От всего сердца я хочу поблагодарить Дмитрия Анатольевича за чуткое отношение, профессионализм и качественную помощь в лечении."
+    text: "Хочу выразить огромную благодарность Фёдорову Дмитрию Анатольевичу за его профессионализм, мастерство, доброту, искренность, чуткость! Обратилась к нему с проблемой варикозного расширения вен. После консультации, результатов УЗИ, была направленна на ЭВЛК, которую Дмитрий Анатольевич провел блестяще! Далее мне провели сеанс склеротерапии, и я с уверенностью могу сказать, что у доктора золотые руки."
   },
   {
-    name: "Пациент +7 919 03XXXXX",
-    date: "14 ноября 2025 в 23:03",
+    name: "Пациент +7 925 82XXXXX",
+    date: "27 мая 2026 в 15:59",
     rating: "5.0 Отлично",
-    speciality: "Сосудистый хирург (ангиохирург)",
-    text: "Хочу выразить огромную благодарность и восхищение доктору Дмитрию Анатольевичу Федорову за блестяще проведенную операцию ЭВЛК по удалению варикозной вены на ноге."
+    speciality: "Флеболог",
+    text: "Обратилась к Федорову Дмитрию Анатольевичу повторно. До этого 2 года назад он провел лазерную коагуляцию, и я осталась очень довольна результатом. В этот раз доктор на приеме проверил состояние вен и посоветовал склеротерапию, все объяснил и дал рекомендации."
   },
   {
-    name: "Пациент +7 903 73XXXXX",
-    date: "22 октября 2025 в 15:11",
+    name: "Пациент +7 977 81XXXXX",
+    date: "20 мая 2026 в 12:51",
     rating: "5.0 Отлично",
-    speciality: "",
-    text: "Был варикоз, болезненное ощущение в ноге, нашла доктора по отзывам на сайте и не пожалела. Хороший доктор, помог справиться с проблемой."
+    speciality: "Флеболог",
+    text: "Меня стала беспокоить тяжесть в ногах, усталость, появились звездочки и вены. Решила заняться этим вопросом. Обратилась по совету к врачу, сделали УЗИ, и врач принял решение, что мне необходима лазерная коагуляция обеих ног. Почитала положительные отзывы о враче и решила поехать к нему, меня не смутили 120 км в один конец. И я не пожалела ни разу."
   },
   {
-    name: "Пациент +7 968 66XXXXX",
-    date: "17 июня 2025 в 11:07",
+    name: "Пациент +7 910 91XXXXX",
+    date: "20 мая 2026 в 07:05",
     rating: "5.0 Отлично",
-    speciality: "",
-    text: "Доктор Дмитрий Анатольевич очень хороший специалист с золотыми руками. Провел мне операцию блестяще. Рекомендую всем, кто хочет забыть, что такое варикозное расширение вен."
+    speciality: "Флеболог",
+    text: "Болела нога. В 2013 году был тромбоз и операция по купированию вены. Было сделано УЗИ и операция по спаиванию вены лазером. Доктор был внимательный, все объяснял и пояснял рекомендации."
   }
 ];
 
+/**
+ * Рейтинг на последний случай, когда не ответил ни один источник.
+ * Живые значения приходят в /data/prodoctorov-reviews.json (поле `rating`).
+ */
+const fallbackRating: ProDoctorovRating = { stars: 5, totalRates: 68 };
+
 const Reviews = () => {
   const [reviews, setReviews] = useState<ProDoctorovReview[]>(fallbackReviews);
-  const [reviewsSource, setReviewsSource] = useState("fallback");
+  const [rating, setRating] = useState<ProDoctorovRating | null>(fallbackRating);
+  const [reviewsSource, setReviewsSource] = useState<string>("built-in");
   const [reviewsUpdatedAt, setReviewsUpdatedAt] = useState<string | null>(null);
-
-  useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://prodoctorov.ru/static/js/widget_footer.js?v06";
-    script.defer = true;
-    script.async = true;
-    document.body.appendChild(script);
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     const loadReviews = async () => {
-      try {
-        const response = await fetch("/api/prodoctorov-reviews.php", { cache: "no-store" });
-        if (!response.ok) throw new Error("reviews_api_unavailable");
-        const payload = (await response.json()) as ReviewsPayload;
-        if (!Array.isArray(payload.reviews) || payload.reviews.length === 0) {
-          throw new Error("reviews_api_empty");
-        }
-        if (!cancelled) {
-          setReviews(payload.reviews.slice(0, 4));
-          setReviewsSource(payload.isCached ? "cache" : payload.source);
-          setReviewsUpdatedAt(payload.cachedAt ?? null);
-        }
-        return;
-      } catch {
+      for (const source of REVIEWS_SOURCES) {
         try {
-          const response = await fetch("/data/prodoctorov-reviews-fallback.json", { cache: "no-store" });
-          if (!response.ok) throw new Error("reviews_fallback_unavailable");
-          const payload = (await response.json()) as ReviewsPayload;
-          if (!cancelled && Array.isArray(payload.reviews) && payload.reviews.length > 0) {
-            setReviews(payload.reviews.slice(0, 4));
-            setReviewsSource("fallback");
-            setReviewsUpdatedAt(payload.cachedAt ?? null);
-          }
+          const { reviews: loaded, cachedAt, rating: loadedRating } = await fetchReviews(source);
+          if (cancelled) return;
+          setReviews(loaded);
+          setReviewsSource(source);
+          setReviewsUpdatedAt(cachedAt);
+          // Источник может не содержать рейтинг — тогда оставляем прежний.
+          if (loadedRating) setRating(loadedRating);
+          return;
         } catch {
-          if (!cancelled) {
-            setReviews(fallbackReviews);
-            setReviewsSource("fallback");
-            setReviewsUpdatedAt(null);
-          }
+          // Источник недоступен — пробуем следующий. Если не ответит ни один,
+          // ниже останутся ранее загруженные отзывы.
         }
+      }
+
+      if (!cancelled) {
+        setReviews(fallbackReviews);
+        setRating(fallbackRating);
+        setReviewsSource("built-in");
+        setReviewsUpdatedAt(null);
       }
     };
 
@@ -135,29 +206,52 @@ const Reviews = () => {
         </div>
       </section>
 
-      {/* ProDoctorov Footer Widget */}
-      <section className="py-12 bg-background">
-        <div className="container max-w-4xl">
-          <div id="pd_widget_footerd556844" className="pd_widget_footer" data-doctor="556844">
-            <div className="pd_left">
-              <a target="_blank" className="pd_doctor_name" href="https://prodoctorov.ru/obninsk/vrach/556844-fedorov/">
-                Федоров Дмитрий Анатольевич
+      {/*
+        Рейтинг на ПроДокторов.
+        Раньше здесь стоял официальный виджет (widget_footer.js). Он перестал
+        работать: ПроДокторов отдаёт на его скрипт HTML-заглушку, и браузер
+        блокирует её (Opaque Response Blocking), поэтому блок оставался пустым.
+        Теперь рейтинг забирает scripts/refresh-prodoctorov-reviews.mjs и мы
+        рисуем его сами — данные те же, что показывал виджет.
+      */}
+      {rating && (
+        <section className="py-12 bg-background" data-rating-stars={rating.stars}>
+          <div className="container max-w-4xl">
+            <div className="flex flex-col gap-5 rounded-xl bg-white p-6 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <a
+                  href={PRODOCTOROV_PROFILE_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-lg font-semibold text-foreground transition-colors hover:text-primary"
+                >
+                  Федоров Дмитрий Анатольевич
+                </a>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <Stars value={rating.stars} />
+                  <span className="text-sm text-muted-foreground">
+                    {rating.stars.toFixed(1)} · {rating.totalRates}{" "}
+                    {plural(rating.totalRates, "оценка", "оценки", "оценок")} на ПроДокторов
+                  </span>
+                </div>
+              </div>
+              <a
+                href={rating.profileUrl || PRODOCTOROV_PROFILE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="shrink-0 text-sm font-semibold text-primary hover:underline"
+              >
+                Читать все отзывы →
               </a>
             </div>
-            <div className="pd_middle">
-              <div id="pd_widget_footer_content_middled556844"></div>
-            </div>
-            <div className="pd_right">
-              <div id="pd_widget_footer_content_rightd556844"></div>
+            <div className="pd_powered_by mt-8 text-center">
+              <a target="_blank" rel="noopener noreferrer" href="https://prodoctorov.ru">
+                <img className="pd_logo mx-auto" width="132" src="/images/prodoctorov-logo.png" alt="ProDoctorov" />
+              </a>
             </div>
           </div>
-          <div className="pd_powered_by mt-8">
-            <a target="_blank" href="https://prodoctorov.ru">
-              <img className="pd_logo" width="132" src="/images/prodoctorov-logo.png" alt="ProDoctorov" />
-            </a>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Latest ProDoctorov reviews */}
       <section className="py-20">
@@ -168,11 +262,12 @@ const Reviews = () => {
               <h2 className="text-3xl font-bold text-foreground">Последние отзывы пациентов</h2>
             </div>
             <p className="text-sm text-muted-foreground">
-              {reviewsSource === "prodoctorov" ? "Обновлено при загрузке страницы" : "Показаны последние сохраненные отзывы"}
-              {reviewsUpdatedAt ? ` · ${new Date(reviewsUpdatedAt).toLocaleDateString("ru-RU")}` : ""}
+              {reviewsUpdatedAt
+                ? `ПроДокторов · обновлено ${new Date(reviewsUpdatedAt).toLocaleDateString("ru-RU")}`
+                : "Показаны последние сохранённые отзывы"}
             </p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-reviews-source={reviewsSource}>
             {reviews.map((r, i) =>
               <div key={i} className="bg-white rounded-xl p-6 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] relative">
                 <div className="text-5xl text-primary/15 font-serif absolute top-3 left-4 leading-none">"</div>

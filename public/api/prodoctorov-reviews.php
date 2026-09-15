@@ -1,5 +1,16 @@
 <?php
 
+/**
+ * Второстепенный источник отзывов ПроДокторов.
+ *
+ * Основной источник — статический файл /data/prodoctorov-reviews.json, который
+ * перезаписывает scripts/refresh-prodoctorov-reviews.mjs (реальный браузер с
+ * человекоподобным отпечатком). Этот эндпоинт оставлен как резерв: прямой
+ * серверный запрос к prodoctorov.ru сейчас почти всегда получает JS-защиту
+ * ServicePipe или 403, поэтому живой скрейпинг здесь чаще всего не срабатывает
+ * и ответ собирается из сохранённых файлов.
+ */
+
 declare(strict_types=1);
 
 header('Content-Type: application/json; charset=utf-8');
@@ -10,6 +21,7 @@ const REVIEWS_LIMIT = 4;
 
 $cacheDir = __DIR__ . '/cache';
 $cacheFile = $cacheDir . '/prodoctorov-reviews.json';
+$refreshFile = dirname(__DIR__) . '/data/prodoctorov-reviews.json';
 $fallbackFile = dirname(__DIR__) . '/data/prodoctorov-reviews-fallback.json';
 
 try {
@@ -35,6 +47,14 @@ if ($cachedPayload !== null && !empty($cachedPayload['reviews'])) {
     $cachedPayload['source'] = $cachedPayload['source'] ?? 'cache';
     $cachedPayload['isCached'] = true;
     respond($cachedPayload);
+}
+
+// Снимок, обновляемый скриптом refresh-prodoctorov-reviews.mjs.
+$refreshPayload = read_json_file($refreshFile);
+if ($refreshPayload !== null && !empty($refreshPayload['reviews'])) {
+    $refreshPayload['source'] = 'prodoctorov';
+    $refreshPayload['isCached'] = true;
+    respond($refreshPayload);
 }
 
 $fallbackPayload = read_json_file($fallbackFile);

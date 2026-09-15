@@ -10,7 +10,20 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+dist-dafedorov
+dist-clinicbase
 *.local
+
+# Временные конфиги Vite (создаются при сборке)
+vite.*.timestamp-*.mjs
+
+# Медиа сайта: 392 МБ видео + 131 МБ фото. Хранится локально, в git не нужно.
+# Уже отслеживаемые файлы внутри public/images/ это не затрагивает.
+public/videos/
+public/images/
+
+# Локальные данные рабочего окружения (память проекта, служебные файлы)
+.workbuddy-ai/
 
 # Editor directories and files
 .vscode/*

@@ -28,4 +28,25 @@
   ExpiresByType image/gif "access plus 1 month"
   ExpiresByType image/png "access plus 1 month"
   ExpiresByType image/jpg "access plus 1 month"
+  # Данные обновляются скриптом, а не сборкой: месячный ExpiresDefault для JSON
+  # заставлял бы браузер и CDN отдавать устаревшую копию.
+  ExpiresByType application/json "access plus 0 seconds"
+  # Карта сайта меняется при добавлении материалов — сутки, а не месяц.
+  ExpiresByType application/xml "access plus 1 hour"
+  ExpiresByType text/xml "access plus 1 hour"
+</IfModule>
+
+# Cache-Control надёжнее Expires: по HTTP/1.1 он имеет приоритет.
+<IfModule mod_headers.c>
+  # Отзывы и рейтинг ПроДокторов перезаписываются ежедневно
+  # (scripts/refresh-prodoctorov-reviews.mjs). no-cache = «перепроверить перед
+  # использованием»: если файл не менялся, сервер ответит 304 и трафик не
+  # потратится, но устаревшая копия показана не будет.
+  <FilesMatch "prodoctorov-reviews.*\.json$">
+    Header set Cache-Control "no-cache, must-revalidate, max-age=0"
+  </FilesMatch>
+
+  <FilesMatch "sitemap\.xml$">
+    Header set Cache-Control "public, max-age=3600"
+  </FilesMatch>
 </IfModule>

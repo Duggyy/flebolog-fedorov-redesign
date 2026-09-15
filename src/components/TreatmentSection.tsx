@@ -41,10 +41,10 @@ const TreatmentSection = () => {
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full mb-10">
           {tabs.map((tab, i) =>
-            i === 3 || i === 7 ? (
+            i === 2 || i === 3 || i === 4 || i === 5 || i === 6 || i === 7 ? (
                 <Link
                 key={i}
-                to={i === 3 ? "/reviews" : "/conference-photos"}
+                to={i === 2 ? "/aesthetic-results" : i === 3 ? "/reviews" : i === 4 ? "/reports" : i === 5 ? "/blog" : i === 6 ? "/colleagues" : "/conference-photos"}
                 className={`py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-semibold transition-all active:scale-[0.97] truncate leading-tight px-2 block text-center ${
                   activeTab === i ?
                   "bg-primary text-primary-foreground shadow-lg shadow-primary/20" :
@@ -70,26 +70,6 @@ const TreatmentSection = () => {
 
         {activeTab === 0 && <MethodsContent />}
         {activeTab === 1 && <ResultsContent />}
-        {activeTab === 2 && <PlaceholderContent title="Эстетическая флебология. Результаты" />}
-{activeTab === 3 && <div className="h-64 flex items-center justify-center bg-muted rounded-xl">
-  <div className="text-center">
-    <Link to="/reviews" className="text-primary hover:underline text-lg font-semibold block mb-2">
-      Перейти к отзывам
-    </Link>
-    <p className="text-muted-foreground text-sm">Читать отзывы пациентов и оставить свой</p>
-  </div>
-</div>}
-        {activeTab === 4 && <PlaceholderContent title="Доклады и выступления" />}
-        {activeTab === 5 && <PlaceholderContent title="Блог врача" />}
-        {activeTab === 6 && <PlaceholderContent title="Фото с коллегами" />}
-        {activeTab === 7 && <div className="h-64 flex items-center justify-center bg-muted rounded-xl">
-          <div className="text-center">
-            <Link to="/conference-photos" className="text-primary hover:underline text-lg font-semibold block mb-2">
-              Перейти к фотографиям с конференций
-            </Link>
-            <p className="text-muted-foreground text-sm">Фотографии с профессиональных конференций и форумов</p>
-          </div>
-        </div>}
       </div>
     </section>);
 
@@ -247,16 +227,6 @@ function ResultsContent() {
     </div>
   );
 }
-
-
-
-const PlaceholderContent = ({ title }: {title: string;}) =>
-<div className="animate-fade-up">
-    <div className="bg-white rounded-xl p-10 text-center shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)]">
-      <p className="text-lg font-semibold text-foreground mb-2">{title}</p>
-      <p className="text-sm text-muted-foreground">Раздел в разработке</p>
-    </div>
-  </div>;
 
 
 export default TreatmentSection;

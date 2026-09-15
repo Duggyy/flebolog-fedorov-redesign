@@ -462,10 +462,10 @@ const getAgeAtDate = (birthDate: string, visitDate: string) => {
 
 const escapeHtml = (value: string) =>
   value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 const getPatientFullName = (patient: Patient) =>
   `${patient.lastName} ${patient.firstName} ${patient.middleName}`.trim();
@@ -1447,7 +1447,7 @@ const DoctorDatabase = () => {
       .map((field) => {
         const value = getPrintFieldValue(field, patient, visit);
         if (!value) return "";
-        return `<p><strong>${escapeHtml(field.label)}:</strong><br>${escapeHtml(value).replaceAll("\n", "<br>")}</p>`;
+        return `<p><strong>${escapeHtml(field.label)}:</strong><br>${escapeHtml(value).replace(/\n/g, "<br>")}</p>`;
       })
       .join("");
 
@@ -1466,9 +1466,9 @@ const DoctorDatabase = () => {
 <body>
   <h1>${escapeHtml(template.name)}</h1>
   <h2>${escapeHtml(getPatientFullName(patient))}</h2>
-  ${template.intro ? `<p>${escapeHtml(template.intro).replaceAll("\n", "<br>")}</p>` : ""}
+  ${template.intro ? `<p>${escapeHtml(template.intro).replace(/\n/g, "<br>")}</p>` : ""}
   ${fieldRows}
-  ${template.outro ? `<p>${escapeHtml(template.outro).replaceAll("\n", "<br>")}</p>` : ""}
+  ${template.outro ? `<p>${escapeHtml(template.outro).replace(/\n/g, "<br>")}</p>` : ""}
 </body>
 </html>`;
   };
