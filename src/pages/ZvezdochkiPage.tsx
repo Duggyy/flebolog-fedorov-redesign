@@ -88,6 +88,15 @@ const ZvezdochkiPage = () => (
 
           <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-2xl p-8 border-l-8 border-primary shadow-xl">
             <h2 className="text-2xl font-bold text-primary border-b-4 border-primary pb-2 inline-block mb-6 tracking-tight">Профилактика сосудистых звездочек на ногах</h2>
+            {/* Вводные абзацы из исходной статьи врача. При переносе материалов
+                они были потеряны, и список советов остался без подводки —
+                второй абзац заканчивается двоеточием и вводит этот список. */}
+            <p className="text-muted-foreground text-base leading-relaxed mb-4">
+              Конечно, в современном мире с его быстрым ритмом жизни сложно устранить абсолютно все причины появления сосудистых звездочек, поскольку это сильно повлияет на образ жизни, а иногда и на ее качество.
+            </p>
+            <p className="text-muted-foreground text-base leading-relaxed mb-6">
+              Но, все же заставив себя следовать некоторым из этих советов, Вы существенно снизите риск возникновения заболевания:
+            </p>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="space-y-3">
                 <p className="font-semibold text-primary text-lg border-b border-primary pb-1"><span className="mr-2">▸</span>Откажитесь от крайне высоких каблуков и выбирайте удобную обувь хотя бы во время прогулок. Пусть высокие «лодочки» останутся для праздничных мероприятий;</p>
