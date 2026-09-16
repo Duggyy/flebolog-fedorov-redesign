@@ -50,6 +50,12 @@ const isNotFound = (h1) => /не найдена|не найден/i.test(h1 || "
 
 async function inspect(pathname) {
   const response = await page.goto(BASE + pathname, { waitUntil: "domcontentloaded" });
+  // ⚠️ Ждать появления h1, а не фиксированную паузу. Маршруты подгружаются
+  // лениво (lazy + Suspense), и на загруженной машине 350 мс не хватало:
+  // страница ещё не отрисовалась, ссылки не собирались, и аудит молча
+  // занижал охват (70 уникальных ссылок против 52 в двух прогонах подряд).
+  // Пауза после h1 нужна, чтобы успели появиться ссылки внутри страницы.
+  await page.waitForSelector("h1", { timeout: 10000 }).catch(() => {});
   await page.waitForTimeout(350);
   const data = await page.evaluate(() => ({
     h1: document.querySelector("h1")?.textContent?.trim() ?? "",
