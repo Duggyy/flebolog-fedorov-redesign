@@ -3,10 +3,30 @@ import SiteNav from "@/components/SiteNav";
 import SiteFooter from "@/components/SiteFooter";
 import { Award, BookOpen, Microscope, Stethoscope, GraduationCap, FileText, X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const Doctor = () => {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+
+  // Пока картинка открыта: Escape закрывает просмотр, а страница под ним
+  // не прокручивается (иначе фон «уезжает» под затемнением).
+  useEffect(() => {
+    if (!selectedImage) return;
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSelectedImage(null);
+    };
+    document.addEventListener("keydown", onKey);
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [selectedImage]);
+
   return (
     <div className="min-h-screen flex flex-col">
       <SiteHeader />
