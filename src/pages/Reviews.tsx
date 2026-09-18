@@ -270,7 +270,10 @@ const Reviews = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6" data-reviews-source={reviewsSource}>
             {reviews.map((r, i) =>
               <div key={i} className="bg-white rounded-xl p-6 shadow-[0_2px_12px_-4px_hsl(220_15%_50%/0.1)] relative">
-                <div className="text-5xl text-primary/15 font-serif absolute top-3 left-4 leading-none">"</div>
+                {/* Кавычка — декор: она намеренно бледная (15% непрозрачности),
+                    поэтому требования контраста к ней не применяются. Помечаем
+                    её скрытой от скринридеров, иначе они читают «кавычка». */}
+                <div aria-hidden="true" className="text-5xl text-primary/15 font-serif absolute top-3 left-4 leading-none">"</div>
                 <p className="text-sm text-muted-foreground leading-relaxed relative z-10 pt-4">{r.text}</p>
                 <div className="mt-4 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm">
