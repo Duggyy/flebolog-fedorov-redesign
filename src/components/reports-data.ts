@@ -7,7 +7,7 @@ export type Report = {
   video: string;
   /** Длительность в секундах. */
   duration: number;
-  /** Страница источника (Rutube). */
+  /** Страница источника: Rutube, либо первоисточник, если копия на Rutube снята. */
   sourceUrl: string;
 };
 
@@ -60,11 +60,19 @@ export const reports: Report[] = [
   },
   {
     slug: "hirurgicheskoe-lechenie-21-vek",
-    title: "Хирургическом лечение варикозной болезни в 21 веке. Все возможные варианты. Перспективы.",
-    poster: "",
-    video: "",
-    duration: 0,
-    sourceUrl: rutube("9e73f6a68376316c0784a74597c76442"),
+    title: "Хирургическое лечение варикозной болезни в 21 веке. Все возможные варианты. Перспективы.",
+    poster: "/videos/reports/hirurgicheskoe-lechenie-21-vek.jpg",
+    video: "/videos/reports/hirurgicheskoe-lechenie-21-vek.mp4",
+    duration: 5061,
+    /*
+     * Копия на Rutube (9e73f6a68376316c0784a74597c76442) снята по жалобе на
+     * авторские права — API отвечает 404 с причиной `UGC_copyright_abuse`.
+     * Видео взято с первоисточника: круглый стол «Академии практической
+     * флебологии» на 1med.tv (участники Кургинян, Соломахин, Маркин, Фёдоров).
+     * Права на запись принадлежат площадке, в кадре — её брендинг.
+     */
+    sourceUrl:
+      "https://1med.tv/archive/akademiya-prakticheskoy-flebologii/akademiya-prakticheskoy-flebologii-khirurgicheskoe-lechenie-varikoznoy-bolezni-v-21-veke-vse-vozmozhnye-varianty-perspektivy-kurginyan-solomakhin-markin-fedorov/",
   },
   {
     slug: "evlk-vchera-segodnya-zavtra",
