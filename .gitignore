@@ -47,6 +47,12 @@ public/images/
 # Локальные данные рабочего окружения (память проекта, служебные файлы)
 .workbuddy-ai/
 
+# Архив для выкладки ClinicBase на reg.ru. Собирается в момент выкладки из
+# dist-clinicbase (`zip` с содержимым папки, а не с самой папкой) — в
+# репозитории не нужен: производный артефакт на 572 КБ, воспроизводится
+# одной командой. Инструкция по загрузке — clinicbase-server-package/docs/.
+clinicbase-server-package/clinicbase-upload.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
