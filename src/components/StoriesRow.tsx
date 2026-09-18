@@ -100,8 +100,10 @@ const StoriesRow = () => {
               она существовала только чтобы развести заголовок и подпись по
               краям, а с одним заголовком не нужна. Отступ mb-3.5 сохранён:
               он отделяет заголовок от ленты. */}
+          {/* «Видео-практика» вместо прежних «Коротких видео» — просьба
+              владельца. Заголовок h2 — см. пояснение в SiteFooter.tsx. */}
           <h2 className="text-lg font-bold text-foreground whitespace-nowrap mb-3.5">
-            Короткие видео
+            Видео-практика
           </h2>
 
           <div className="relative">
@@ -162,11 +164,12 @@ const StoriesRow = () => {
   );
 };
 
-/** Полноэкранный просмотр: автопереход, полосы прогресса, звук по кнопке. */
+/** Полноэкранный просмотр: автопереход, полосы прогресса, звук включён сразу. */
 const StoryViewer = ({ startIndex, onClose }: { startIndex: number; onClose: () => void }) => {
   const [current, setCurrent] = useState(startIndex);
   const [progress, setProgress] = useState(0);
-  const [muted, setMuted] = useState(true);
+  // Звук включён по умолчанию — просьба владельца.
+  const [muted, setMuted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const story = stories[current];
 
@@ -210,9 +213,36 @@ const StoryViewer = ({ startIndex, onClose }: { startIndex: number; onClose: () 
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, next, prev]);
 
-  // Атрибут `muted` в React обновляется ненадёжно — ставим свойство напрямую.
+  /**
+   * Звук и запуск воспроизведения.
+   *
+   * Атрибут `muted` в React обновляется ненадёжно — ставим свойство напрямую.
+   *
+   * Звук включён ПО УМОЛЧАНИЮ (просьба владельца), а браузер разрешает
+   * автоплей со звуком только после действия пользователя. Просмотр
+   * открывается кликом по миниатюре, то есть жест есть, и обычно видео играет
+   * со звуком сразу. Но если браузер всё же откажет, замерший кадр не
+   * оставляем: повторяем запуск без звука и переводим кнопку в состояние
+   * «включить звук» — тогда посетитель включит его одним нажатием.
+   */
   useEffect(() => {
-    if (videoRef.current) videoRef.current.muted = muted;
+    const v = videoRef.current;
+    if (!v) return;
+    let cancelled = false;
+    v.muted = muted;
+
+    const started = v.play();
+    if (started && typeof started.catch === "function") {
+      started.catch(() => {
+        if (cancelled || v.muted) return;
+        v.muted = true;
+        setMuted(true);
+        void v.play().catch(() => {});
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
   }, [muted, current]);
 
   useEffect(() => {
