@@ -5,6 +5,26 @@
 @tailwind utilities;
 
 @layer base {
+  /*
+   * Палитра. Фирменные цвета подобраны так, чтобы проходить WCAG AA (4.5:1) в
+   * тех местах, где они используются как текст, — с учётом того, что светлые
+   * плашки (bg-primary/20, bg-secondary/10, bg-destructive/10) являются
+   * полупрозрачными заливками ТЕХ ЖЕ переменных. Поэтому осветлить цвет нельзя
+   * «в отрыве»: вместе с ним темнеет и подложка под текстом, и контраст
+   * ухудшается с двух сторон сразу.
+   *
+   * Значения посчитаны скриптом .workbuddy-ai/checks/solve-contrast.mjs
+   * (он же пересчитывает заливки). Проверка — .workbuddy-ai/checks/check-contrast.mjs.
+   * Если меняете эти три переменные, прогоните проверку контраста заново.
+   *
+   * --primary 220 72% 46% → #2159CA, белый текст 4.63:1 на плашке primary/20
+   * --secondary 195 85% 32% → #0C7497, белый текст, худший случай 4.61:1
+   * --destructive 0 84% 37% → #AE0F0F, худший случай 4.56:1 (текст на
+   *   наложенных плашках primary/20 + destructive/10 на /yazvy)
+   * --muted-foreground 220 15% 44% → #5F6B81. Серый текст на плашке primary/10
+   *   давал 4.51:1 при старом primary; после затемнения синего стало 4.47:1,
+   *   то есть на грани. Понизили светлоту на 1 п.п. → 4.63:1.
+   */
   :root {
     --background: 0 0% 100%;
     --foreground: 220 30% 18%;
@@ -12,28 +32,28 @@
     --card-foreground: 220 30% 18%;
     --popover: 0 0% 100%;
     --popover-foreground: 220 30% 18%;
-    --primary: 220 72% 50%;
+    --primary: 220 72% 46%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 195 85% 45%;
+    --secondary: 195 85% 32%;
     --secondary-foreground: 0 0% 100%;
     --muted: 220 20% 96%;
-    --muted-foreground: 220 15% 45%;
-    --accent: 220 72% 50%;
+    --muted-foreground: 220 15% 44%;
+    --accent: 220 72% 46%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
+    --destructive: 0 84% 37%;
     --destructive-foreground: 0 0% 98%;
     --border: 220 15% 91%;
     --input: 220 15% 91%;
-    --ring: 220 72% 50%;
+    --ring: 220 72% 46%;
     --radius: 0.625rem;
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 220 30% 18%;
-    --sidebar-primary: 220 72% 50%;
+    --sidebar-primary: 220 72% 46%;
     --sidebar-primary-foreground: 0 0% 98%;
     --sidebar-accent: 220 20% 96%;
     --sidebar-accent-foreground: 220 30% 18%;
     --sidebar-border: 220 15% 91%;
-    --sidebar-ring: 220 72% 50%;
+    --sidebar-ring: 220 72% 46%;
     --hero-heading: 220 30% 18%;
     --section-bg: 220 25% 97%;
     --navy: 220 55% 12%;
