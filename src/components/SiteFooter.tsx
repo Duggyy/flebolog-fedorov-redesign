@@ -6,7 +6,12 @@ const SiteFooter = () => {
       <div className="container">
         <div className="flex justify-center">
           <div>
-            <h3 className="text-lg font-bold text-white mb-4">Разделы</h3>
+            {/* ⚠️ Здесь именно h2, а не h3. Футер есть на каждой странице, а h3
+                требует, чтобы выше был h2. На страницах без h2 (альбомы
+                конференций, статьи новостей и блога — там всего два заголовка,
+                h1 и этот) получался перескок уровней h1 → h3: 50 страниц из 69.
+                Оформление задаётся классами, поэтому на вид ничего не меняется. */}
+            <h2 className="text-lg font-bold text-white mb-4">Разделы</h2>
             <ul className="space-y-2 text-sm text-navy-foreground/80">
               <li><Link to="/" className="hover:text-white transition-colors">Главная</Link></li>
               <li><Link to="/reviews" className="hover:text-white transition-colors">Отзывы</Link></li>

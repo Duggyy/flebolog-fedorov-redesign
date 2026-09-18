@@ -61,9 +61,14 @@ const News = () => {
                         <Calendar className="h-3.5 w-3.5" />
                         <time>{item.date}</time>
                       </div>
-                      <h3 className="text-sm font-bold text-foreground leading-snug mb-2 line-clamp-2 group-hover:text-primary transition-colors">
+                      {/* ⚠️ h2, а не h3 — как во всех остальных списках сайта
+                          (блог, альбомы конференций, доклады, коллеги). В списке
+                          новостей заголовок карточки был единственным h3 среди
+                          h2, из-за чего получался перескок h1 → h3. Оформление
+                          задаётся классами, поэтому на вид ничего не меняется. */}
+                      <h2 className="text-sm font-bold text-foreground leading-snug mb-2 line-clamp-2 group-hover:text-primary transition-colors">
                         {item.title}
-                      </h3>
+                      </h2>
                       {item.anons && (
                         <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">{item.anons}</p>
                       )}
