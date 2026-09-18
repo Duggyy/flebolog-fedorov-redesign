@@ -11,7 +11,8 @@
  * (soft-404). Проверка статуса такой битый линк не найдёт.
  *
  * Запуск (нужен работающий сервер — дев или `vite preview`):
- *   npm run audit:links                          # http://127.0.0.1:4182
+ *   npm run audit:links                          # порт определяется сам (4173 → 8080)
+ *   npm run audit:links -- http://127.0.0.1:8080 # конкретный адрес
  *   npm run audit:links -- https://dafedorov.ru  # по живому сайту после выкладки
  */
 import fs from "node:fs";
@@ -26,7 +27,52 @@ const EXECUTABLE =
 // ⚠️ Именно fileURLToPath, а не new URL(...).pathname: в имени папки проекта
 // есть пробел, и pathname вернул бы его как %20 — путь бы не открылся.
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const BASE = (process.argv[2] || "http://127.0.0.1:4182").replace(/\/$/, "");
+
+// --- Определяем базу ---------------------------------------------------------
+// ⚠️ Раньше здесь был жёстко зашит порт 4182, которого нет ни в одном конфиге
+// проекта: `vite preview` слушает 4173, а `npm run dev:site` — 8080 (server.port
+// в vite.site.config.ts). Скрипт падал сырым стектрейсом ERR_CONNECTION_REFUSED,
+// и выглядело это как поломка аудита, хотя просто не тот порт.
+// Явный адрес (аргумент или AUDIT_BASE) главнее всего — тогда падаем громко.
+// Без него перебираем порты, которые проект реально использует.
+const EXPLICIT = process.argv[2] || process.env.AUDIT_BASE || "";
+const CANDIDATES = EXPLICIT
+  ? [EXPLICIT]
+  : ["http://127.0.0.1:4173", "http://127.0.0.1:8080", "http://127.0.0.1:5173"];
+
+/** Любой ответ (в т.ч. 404) означает, что сервер жив; исключение — не отвечает. */
+const alive = async (base) => {
+  try {
+    await fetch(`${base}/sitemap.xml`, { signal: AbortSignal.timeout(2500) });
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+let BASE = "";
+for (const candidate of CANDIDATES) {
+  const clean = candidate.replace(/\/$/, "");
+  if (await alive(clean)) {
+    BASE = clean;
+    break;
+  }
+}
+
+if (!BASE) {
+  console.error(
+    "Аудит ссылок: сервер не отвечает ни на одном из адресов:\n" +
+      CANDIDATES.map((c) => `  ${c}`).join("\n") +
+      "\n\nАудиту нужен запущенный сервер. Поднимите его в соседнем терминале:\n" +
+      "  npm run preview     # прод-сборка, http://127.0.0.1:4173\n" +
+      "  npm run dev:site    # дев-сервер,  http://127.0.0.1:8080\n" +
+      "\nЛибо укажите адрес явно:\n" +
+      "  npm run audit:links -- https://dafedorov.ru",
+  );
+  process.exit(2);
+}
+
+if (!EXPLICIT) console.log(`База определена автоматически: ${BASE}`);
 
 // Список страниц берём из sitemap сборки; для живого сайта — с самого сайта.
 const localSitemap = path.join(rootDir, "dist-dafedorov/sitemap.xml");
@@ -49,7 +95,19 @@ const page = await context.newPage();
 const isNotFound = (h1) => /не найдена|не найден/i.test(h1 || "");
 
 async function inspect(pathname) {
-  const response = await page.goto(BASE + pathname, { waitUntil: "domcontentloaded" });
+  let response;
+  try {
+    response = await page.goto(BASE + pathname, { waitUntil: "domcontentloaded" });
+  } catch (err) {
+    // Сервер упал уже во время прогона — это не битая ссылка, а потеря связи.
+    // Без этой ветки аудит падал стектрейсом посреди списка страниц.
+    if (/ERR_CONNECTION_REFUSED|ERR_CONNECTION_RESET|ERR_EMPTY_RESPONSE/.test(String(err))) {
+      console.error(`\nСвязь с ${BASE} потеряна на ${pathname} — сервер остановился.`);
+      await browser.close().catch(() => {});
+      process.exit(2);
+    }
+    throw err;
+  }
   // ⚠️ Ждать появления h1, а не фиксированную паузу. Маршруты подгружаются
   // лениво (lazy + Suspense), и на загруженной машине 350 мс не хватало:
   // страница ещё не отрисовалась, ссылки не собирались, и аудит молча
