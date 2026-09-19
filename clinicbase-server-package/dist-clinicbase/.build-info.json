@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "ec386e77b79c31763973cb168e24b17952cfa2d6",
-  "shortSha": "ec386e7",
-  "subject": "Видео-практика: в первый кружок — полный ролик «Как удалить вены»",
-  "builtAt": "2026-09-18T22:12:46.549Z",
-  "dirty": false
+  "sha": "4bacfe7e54fd0ca72e4adcf9f91b0e4141b957f4",
+  "shortSha": "4bacfe7",
+  "subject": "Линтер: 5 ошибок исправлены (их никогда не запускали)",
+  "builtAt": "2026-09-19T11:32:14.930Z",
+  "dirty": true
 }

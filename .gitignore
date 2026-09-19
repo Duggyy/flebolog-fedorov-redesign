@@ -53,6 +53,11 @@ public/images/
 # одной командой. Инструкция по загрузке — clinicbase-server-package/docs/.
 clinicbase-server-package/clinicbase-upload.zip
 
+# Архив для выкладки САЙТА на reg.ru: только те файлы, которых нет на боевом
+# (сборка считается по content_type, см. SKILL.md «Что именно надо выложить»).
+# Тоже производный артефакт — собирается из dist-dafedorov одной командой.
+dafedorov-upload.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
