@@ -64,7 +64,14 @@ export const colleagues: Colleague[] = [
   {
     slug: "uldis-maurins",
     name: "Dr. med. Uldis Mauriņš; Улдис Мауриньш (Латвия)",
-    photo: "/images/colleagues/uldis-maurins/photo.jpg",
+    // ⚠️ Единственный коллега без полноразмерного фото: `photo.jpg` нет ни в
+    // `public/`, ни в `dist/`, ни в истории git — файл невосстановим. До этого
+    // здесь стоял путь к нему, и клик по карточке открывал битую картинку
+    // (ловится проверкой `audit-media`). Подставлена миниатюра 400×266 —
+    // у остальных `photo.jpg` 1000×563, так что картинка мягче, но не битая.
+    // Если владелец пришлёт оригинал — положить в `public/images/colleagues/
+    // uldis-maurins/photo.jpg` и вернуть путь.
+    photo: "/images/colleagues/uldis-maurins/thumb.jpg",
     thumb: "/images/colleagues/uldis-maurins/thumb.jpg",
     description: [],
   },
