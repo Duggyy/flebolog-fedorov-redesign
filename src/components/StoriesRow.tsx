@@ -123,7 +123,10 @@ const StoriesRow = () => {
                   key={story.id}
                   type="button"
                   onClick={() => setOpenIndex(i)}
-                  aria-label={`Смотреть видео: ${story.caption}`}
+                  // Подпись может быть пустой (владелец убрал её у одного
+                  // ролика) — тогда для скринридера берём короткое название,
+                  // иначе кнопка называлась бы «Смотреть видео:».
+                  aria-label={`Смотреть видео: ${story.caption || story.label}`}
                   className="group flex w-[68px] flex-shrink-0 flex-col items-center gap-[7px] focus:outline-none"
                 >
                   <span className="block rounded-full bg-primary p-[2.5px] transition-transform group-hover:scale-105 group-active:scale-95 group-focus-visible:ring-2 group-focus-visible:ring-primary/40">
@@ -321,15 +324,15 @@ const StoryViewer = ({ startIndex, onClose }: { startIndex: number; onClose: () 
         </div>
 
         <div className="absolute inset-x-0 bottom-0 bg-black/45 px-3.5 pb-4 pt-4">
-          <p className="text-[13px] leading-relaxed text-white">{story.caption}</p>
+          {/* Подпись рисуется только если она есть: у ролика «Редкая операция»
+              владелец попросил её убрать (2026-10-18), а пустой <p> оставлял бы
+              лишний отступ над кнопкой. */}
+          {story.caption && (
+            <p className="text-[13px] leading-relaxed text-white">{story.caption}</p>
+          )}
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link
-              to="/doctor"
-              onClick={onClose}
-              className="rounded-full border border-white/60 px-3 py-1.5 text-xs text-white transition-colors hover:bg-white/10"
-            >
-              Записаться на приём
-            </Link>
+            {/* Ссылка «Записаться на приём» убрана из всех роликов по просьбе
+                владельца (2026-10-18). Вторая ссылка остаётся. */}
             <Link
               to="/phlebology"
               onClick={onClose}
