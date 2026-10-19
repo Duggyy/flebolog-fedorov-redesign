@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "ce51a27ecd40fb1dcbc952b16e7dd8fb2cdb83ff",
-  "shortSha": "ce51a27",
-  "subject": "Пакет ClinicBase: имя бандла приведено к HEAD",
-  "builtAt": "2026-10-19T12:10:59.147Z",
+  "sha": "a2eda1f6fa53fdaa930150c5463e576e1ec653e5",
+  "shortSha": "a2eda1f",
+  "subject": "Блог врача: громкость шести старых роликов выровнена",
+  "builtAt": "2026-10-19T12:42:47.749Z",
   "dirty": true
 }
