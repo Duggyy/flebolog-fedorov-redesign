@@ -112,6 +112,7 @@ export const blogPosts: BlogPost[] = [
     kicker: "",
     anons: "В Декабре 2019 года на базе нашего флебологического центра ВПЕРВЫЕ в России была выполнена операция «Тотальная ЭВЛК».",
     cover: "/images/blog/totalnaya-evlk/cover.jpg",
+    poster: "/videos/blog/totalnaya-evlk-v2.jpg",
     pdf: null,
     blocks: [
       { type: "video", src: "/videos/blog/totalnaya-evlk-v2.mp4" },
@@ -202,6 +203,7 @@ export const blogPosts: BlogPost[] = [
     kicker: "",
     anons: "Рассказывает врач флеболог, к.м.н. Федоров Д.А.",
     cover: "/images/blog/totalnaya-evlk-chto-eto-takoe/cover.jpg",
+    poster: "/videos/blog/totalnaya-evlk-chto-eto-takoe-v2.jpg",
     pdf: null,
     blocks: [
       { type: "image", src: "/images/blog/totalnaya-evlk-chto-eto-takoe/photo-01.jpg", thumb: "/images/blog/totalnaya-evlk-chto-eto-takoe/cover.jpg" },
@@ -217,6 +219,7 @@ export const blogPosts: BlogPost[] = [
     kicker: "",
     anons: "Видео с врачом флебологом, кандидатом медицинских наук Федоровым Дмитрием Анатольевичем",
     cover: "/images/blog/zachem-delat-uzi-pered-lecheniem/cover.jpg",
+    poster: "/videos/blog/zachem-delat-uzi-pered-lecheniem-v2.jpg",
     pdf: null,
     blocks: [
       { type: "image", src: "/images/blog/zachem-delat-uzi-pered-lecheniem/photo-01.jpg", thumb: "/images/blog/zachem-delat-uzi-pered-lecheniem/cover.jpg" },
@@ -232,6 +235,7 @@ export const blogPosts: BlogPost[] = [
     kicker: "",
     anons: "Видео с врачом флебологом Федоровым Д.А.",
     cover: "/images/blog/mozhno-li-naznachit-lechenie-tolko-po-uzi/cover.jpg",
+    poster: "/videos/blog/mozhno-li-naznachit-lechenie-tolko-po-uzi-v2.jpg",
     pdf: null,
     blocks: [
       { type: "image", src: "/images/blog/mozhno-li-naznachit-lechenie-tolko-po-uzi/photo-01.jpg", thumb: "/images/blog/mozhno-li-naznachit-lechenie-tolko-po-uzi/cover.jpg" },
@@ -247,6 +251,7 @@ export const blogPosts: BlogPost[] = [
     kicker: "",
     anons: "Рассказывает врач флеболог, к.м.н. Федоров Д.А.",
     cover: "/images/blog/totalnaya-evlk-avtorskaya-metodika-2022/cover.jpg",
+    poster: "/videos/blog/totalnaya-evlk-avtorskaya-metodika-2022-v2.jpg",
     pdf: null,
     blocks: [
       { type: "image", src: "/images/blog/totalnaya-evlk-avtorskaya-metodika-2022/photo-01.jpg", thumb: "/images/blog/totalnaya-evlk-avtorskaya-metodika-2022/cover.jpg" },
@@ -262,6 +267,7 @@ export const blogPosts: BlogPost[] = [
     kicker: "",
     anons: "Когда необходимо обратиться к флебологу и какие методы лечения варикоза применяются в современной медицине?",
     cover: "/images/blog/lechenie-varikoza-lazerom/cover.jpg",
+    poster: "/videos/blog/lechenie-varikoza-lazerom-v2.jpg",
     pdf: null,
     blocks: [
       { type: "text", text: "Варикозное расширение вен может проявлять себя по-разному. Это не обязательно какие-то серьезные изменения, которые приводят инвалидизации и потере трудоспособности. Появление даже простых жилок и капилляров, просвечивающих через кожу на ногах, тоже является варикозом. Из видео вы узнаете о методе тотального эндовазального лечения варикоза (ЭВЛК) и его преимуществах. Рассказывает ведущий флеболог клиники \"Ниармедик\", кандидат медицинских наук Фёдоров Дмитрий Анатольевич . Записаться на консультацию можно по тел.: 8 (484) 397-25-25, 8 (484) 399-20-91." },
