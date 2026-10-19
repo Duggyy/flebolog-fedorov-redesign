@@ -114,7 +114,7 @@ export const blogPosts: BlogPost[] = [
     cover: "/images/blog/totalnaya-evlk/cover.jpg",
     pdf: null,
     blocks: [
-      { type: "video", src: "/videos/blog/totalnaya-evlk.mp4" },
+      { type: "video", src: "/videos/blog/totalnaya-evlk-v2.mp4" },
       { type: "text", text: "Для обычного пациента, страдающего варикозным расширением вен нижних конечностей, важно провести лечение самым малотраватичным способом и ему не очень понятно, чем именно будет выполняться это вмешательство и какие есть различия в лечении." },
       { type: "text", text: "Все привыкли к тому, что для лечения варикоза выполняется запаивание вен лазером. Эта процедура называется ЭндоВазальная Лазерная Коагуляция (ЭВЛК). Но мало кто из пациентов задается вопросом – что именно «запаивают» лазером? А это очень важно!" },
       { type: "text", text: "Большинство флебологов выполняют «запайку» лазером лишь небольшого сегмента магистральной подкожной вены. Остальные участки и варикозные узлы (что и заставляет пациентов обратиться за лечением) выдергиваются крючками. Эта процедура маскируется под названием мини или микрофлебэктомия, но сути метода это не меняет. Это именно выдергивание пораженных вен механическим способом, как делали это много лет назад. Да, на современном этапе есть возможность выдернуть вены из небольших проколов, а не разрезов, как это делалось ранее, но… сути это не меняет. Неужели все так пессимистично и флебология продвинулась вперед лишь на несколько десятков сантиметров внутрисосудистой «запайки» вен, а остальное нам неподвластно???" },
@@ -205,7 +205,7 @@ export const blogPosts: BlogPost[] = [
     pdf: null,
     blocks: [
       { type: "image", src: "/images/blog/totalnaya-evlk-chto-eto-takoe/photo-01.jpg", thumb: "/images/blog/totalnaya-evlk-chto-eto-takoe/cover.jpg" },
-      { type: "video", src: "/videos/blog/totalnaya-evlk-chto-eto-takoe.mp4" },
+      { type: "video", src: "/videos/blog/totalnaya-evlk-chto-eto-takoe-v2.mp4" },
     ],
     sourceUrl: "https://flebologfedorov.ru/blog/blog_57.html",
   },
@@ -220,7 +220,7 @@ export const blogPosts: BlogPost[] = [
     pdf: null,
     blocks: [
       { type: "image", src: "/images/blog/zachem-delat-uzi-pered-lecheniem/photo-01.jpg", thumb: "/images/blog/zachem-delat-uzi-pered-lecheniem/cover.jpg" },
-      { type: "video", src: "/videos/blog/zachem-delat-uzi-pered-lecheniem.mp4" },
+      { type: "video", src: "/videos/blog/zachem-delat-uzi-pered-lecheniem-v2.mp4" },
     ],
     sourceUrl: "https://flebologfedorov.ru/blog/blog_58.html",
   },
@@ -235,7 +235,7 @@ export const blogPosts: BlogPost[] = [
     pdf: null,
     blocks: [
       { type: "image", src: "/images/blog/mozhno-li-naznachit-lechenie-tolko-po-uzi/photo-01.jpg", thumb: "/images/blog/mozhno-li-naznachit-lechenie-tolko-po-uzi/cover.jpg" },
-      { type: "video", src: "/videos/blog/mozhno-li-naznachit-lechenie-tolko-po-uzi.mp4" },
+      { type: "video", src: "/videos/blog/mozhno-li-naznachit-lechenie-tolko-po-uzi-v2.mp4" },
     ],
     sourceUrl: "https://flebologfedorov.ru/blog/blog_59.html",
   },
@@ -250,7 +250,7 @@ export const blogPosts: BlogPost[] = [
     pdf: null,
     blocks: [
       { type: "image", src: "/images/blog/totalnaya-evlk-avtorskaya-metodika-2022/photo-01.jpg", thumb: "/images/blog/totalnaya-evlk-avtorskaya-metodika-2022/cover.jpg" },
-      { type: "video", src: "/videos/blog/totalnaya-evlk-avtorskaya-metodika-2022.mp4" },
+      { type: "video", src: "/videos/blog/totalnaya-evlk-avtorskaya-metodika-2022-v2.mp4" },
     ],
     sourceUrl: "https://flebologfedorov.ru/blog/blog_60.html",
   },
@@ -265,7 +265,7 @@ export const blogPosts: BlogPost[] = [
     pdf: null,
     blocks: [
       { type: "text", text: "Варикозное расширение вен может проявлять себя по-разному. Это не обязательно какие-то серьезные изменения, которые приводят инвалидизации и потере трудоспособности. Появление даже простых жилок и капилляров, просвечивающих через кожу на ногах, тоже является варикозом. Из видео вы узнаете о методе тотального эндовазального лечения варикоза (ЭВЛК) и его преимуществах. Рассказывает ведущий флеболог клиники \"Ниармедик\", кандидат медицинских наук Фёдоров Дмитрий Анатольевич . Записаться на консультацию можно по тел.: 8 (484) 397-25-25, 8 (484) 399-20-91." },
-      { type: "video", src: "/videos/blog/lechenie-varikoza-lazerom.mp4" },
+      { type: "video", src: "/videos/blog/lechenie-varikoza-lazerom-v2.mp4" },
     ],
     sourceUrl: "https://flebologfedorov.ru/blog/blog_42.html",
   },
