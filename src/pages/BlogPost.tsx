@@ -107,15 +107,29 @@ const BlogPost = () => {
                   );
                 }
                 if (block.type === "video") {
+                  // Вертикальный ролик (9:16) нельзя растягивать на всю ширину
+                  // колонки: при 768 px он вырос бы до 1365 px в высоту. Поэтому
+                  // ширина не задаётся жёстко (`w-auto`), а высота ограничена
+                  // 75vh — браузер сам подбирает ширину по пропорциям файла.
+                  //
+                  // ⚠️ Пропорции заданы явно (`aspect-video` / `aspect-[9/16]`).
+                  // Без этого высота рамки считается по ОБЛОЖКЕ, а не по видео:
+                  // у старых публикаций обложка 400×396, и ролик 16:9 оказывался
+                  // в почти квадратной рамке 768×760 с чёрными полосами. Это было
+                  // и до добавления вертикальных роликов.
                   return (
                     <figure key={i} className="my-8">
                       <video
                         src={block.src}
-                        poster={post.cover || undefined}
+                        poster={post.poster || post.cover || undefined}
                         controls
                         preload="metadata"
                         playsInline
-                        className="w-full rounded-xl bg-black shadow-lg"
+                        className={
+                          block.portrait
+                            ? "mx-auto block aspect-[9/16] max-h-[75vh] w-auto max-w-full rounded-xl bg-black shadow-lg"
+                            : "aspect-video w-full rounded-xl bg-black shadow-lg"
+                        }
                       />
                     </figure>
                   );
