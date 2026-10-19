@@ -57,6 +57,10 @@ clinicbase-server-package/clinicbase-upload.zip
 # (сборка считается по content_type, см. SKILL.md «Что именно надо выложить»).
 # Тоже производный артефакт — собирается из dist-dafedorov одной командой.
 dafedorov-upload.zip
+# Плюс папка, из которой этот архив собирается: те же 130 МБ распакованных
+# файлов. Без правила она висела неотслеживаемой, и `git add -A` затянул бы
+# в историю всё видео сайта.
+/dafedorov-upload/
 
 # Editor directories and files
 .vscode/*

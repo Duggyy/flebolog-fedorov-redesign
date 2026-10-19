@@ -331,8 +331,18 @@ const StoryViewer = ({ startIndex, onClose }: { startIndex: number; onClose: () 
             <p className="text-[13px] leading-relaxed text-white">{story.caption}</p>
           )}
           <div className="mt-3 flex flex-wrap gap-2">
-            {/* Ссылка «Записаться на приём» убрана из всех роликов по просьбе
-                владельца (2026-10-18). Вторая ссылка остаётся. */}
+            {/* «Записаться на приём» убрана из всех роликов (2026-10-18).
+                «Смотреть другие видео» добавлена 2026-10-19 по просьбе
+                владельца: у первых двух роликов ведёт в блог врача, у
+                остальных — в раздел эстетической флебологии. Адрес берётся
+                из данных ролика (`moreHref`), а не из его номера в ленте. */}
+            <Link
+              to={story.moreHref}
+              onClick={onClose}
+              className="rounded-full border border-white/60 px-3 py-1.5 text-xs text-white transition-colors hover:bg-white/10"
+            >
+              Смотреть другие видео
+            </Link>
             <Link
               to="/phlebology"
               onClick={onClose}

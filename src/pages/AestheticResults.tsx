@@ -29,10 +29,12 @@ const AestheticResults = () => {
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground mb-6">
               <Link to="/" className="hover:text-primary transition-colors">Главная</Link>
               <ChevronRight className="h-3.5 w-3.5" />
-              <span className="text-foreground font-medium">Эстетическая флебология. Результаты</span>
+              <span className="text-foreground font-medium">Эстетическая флебология</span>
             </div>
-            <p className="text-secondary text-sm font-semibold uppercase tracking-widest mb-2">Эстетическая флебология</p>
-            <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Результаты</h1>
+            {/* Надзаголовок убран 2026-10-19: раздел переименован из
+                «Эстетическая флебология. Результаты» в «Эстетическая
+                флебология», и прежний надзаголовок дублировал бы <h1>. */}
+            <h1 className="text-3xl md:text-4xl font-bold text-foreground mb-4">Эстетическая флебология</h1>
             <p className="text-muted-foreground leading-relaxed max-w-3xl text-base">
               Удаление сосудистых звёздочек и «сеточек», лечение расширенных вен на ногах и руках
               с максимальным косметическим результатом.
