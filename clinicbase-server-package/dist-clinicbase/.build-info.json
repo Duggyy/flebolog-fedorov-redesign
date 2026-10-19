@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "79200875735e02d375d889a1e2909dd8cbb39626",
-  "shortSha": "7920087",
-  "subject": "Блог врача: три видео от АртВе",
-  "builtAt": "2026-10-19T12:09:02.903Z",
+  "sha": "ce51a27ecd40fb1dcbc952b16e7dd8fb2cdb83ff",
+  "shortSha": "ce51a27",
+  "subject": "Пакет ClinicBase: имя бандла приведено к HEAD",
+  "builtAt": "2026-10-19T12:10:59.147Z",
   "dirty": true
 }
