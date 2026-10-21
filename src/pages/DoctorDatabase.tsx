@@ -1645,14 +1645,66 @@ const DoctorDatabase = () => {
       <main className="w-full px-2 py-1.5">
         <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-[#c6ced9] bg-[#dfe4ea] px-2 py-1">
           <h1 className="text-[13px] font-semibold text-foreground">База приёмов</h1>
-          <p className="text-[11px] text-muted-foreground">
-            {doctor.name} · {doctor.speciality}
-          </p>
+          {/* Фамилию врача не дублируем: она видна в селекте «Врач» рядом. */}
+          <p className="text-[11px] text-muted-foreground">{doctor.speciality}</p>
           {hasUnsavedChanges && (
             <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
               есть несохранённые изменения
             </span>
           )}
+
+          {/* Организация и врач — это контекст всего экрана, а не фильтр списка
+              пациентов. В колонке они занимали верхние ~90 px, которые нужнее
+              самим пациентам: в панели они стоят в одну строку и не стоят
+              ничего по высоте. Подписи — строчные, слева от поля: надпись над
+              полем в панели растянула бы её на две строки. */}
+          <div className="flex items-center gap-1">
+            <Label
+              htmlFor="organization-select"
+              className="text-[10px] uppercase tracking-wide text-muted-foreground"
+            >
+              Организация
+            </Label>
+            <select
+              id="organization-select"
+              required
+              className="h-6 max-w-[150px] rounded-sm border border-[#c6ced9] bg-white px-1 text-[11px]"
+              value={activeOrganization}
+              onChange={(event) => {
+                requestProtectedAction((sourceRecords) =>
+                  selectOrganization(event.target.value, sourceRecords),
+                );
+              }}
+            >
+              {organizations.map((organization) => (
+                <option key={organization} value={organization}>
+                  {organization}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <Label htmlFor="doctor-select" className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Врач
+            </Label>
+            <select
+              id="doctor-select"
+              className="h-6 max-w-[150px] rounded-sm border border-[#c6ced9] bg-white px-1 text-[11px]"
+              value={doctor.id}
+              onChange={(event) => {
+                const nextDoctor = doctors.find((item) => item.id === event.target.value) ?? doctor;
+                requestProtectedAction((sourceRecords) => selectDoctor(nextDoctor, sourceRecords));
+              }}
+            >
+              {doctorsInSelectedOrganization.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <div className="ml-auto flex flex-wrap gap-1.5">
             <Button variant="outline" size="sm" onClick={addPatient} className="h-6 px-2 text-[11px]">
               <Plus className="mr-1 h-3 w-3" />
@@ -1675,53 +1727,12 @@ const DoctorDatabase = () => {
             поле. Иначе при каждом фокусе форма переезжала: колонка то
             появлялась, то исчезала, и текст под курсором сдвигался. */}
         <div className="grid gap-1.5 xl:grid-cols-[248px_minmax(0,1fr)_300px]">
-          <aside className="rounded-sm border border-[#c6ced9] bg-[#f4f6f9]">
-            <div className="border-b border-[#c6ced9] bg-[#e7ebf1] p-1.5">
-              <Label htmlFor="organization-select" className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Организация *
-              </Label>
-              <select
-                id="organization-select"
-                required
-                className="mt-0.5 h-6 w-full rounded-sm border border-[#c6ced9] bg-white px-1 text-[11px]"
-                value={activeOrganization}
-                onChange={(event) => {
-                  requestProtectedAction((sourceRecords) =>
-                    selectOrganization(event.target.value, sourceRecords),
-                  );
-                }}
-              >
-                {organizations.map((organization) => (
-                  <option key={organization} value={organization}>
-                    {organization}
-                  </option>
-                ))}
-              </select>
-
-              <Label
-                htmlFor="doctor-select"
-                className="mt-1 block text-[10px] uppercase tracking-wide text-muted-foreground"
-              >
-                Врач
-              </Label>
-              <select
-                id="doctor-select"
-                className="mt-0.5 h-6 w-full rounded-sm border border-[#c6ced9] bg-white px-1 text-[11px]"
-                value={doctor.id}
-                onChange={(event) => {
-                  const nextDoctor = doctors.find((item) => item.id === event.target.value) ?? doctor;
-                  requestProtectedAction((sourceRecords) =>
-                    selectDoctor(nextDoctor, sourceRecords),
-                  );
-                }}
-              >
-                {doctorsInSelectedOrganization.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-              <div className="relative mt-1">
+          {/* Колонка пациентов закреплена так же, как подсказки: при прокрутке
+              длинной истории болезни список остаётся на виду, а не уезжает
+              вверх вместе с формой. */}
+          <aside className="flex flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]">
+            <div className="border-b border-[#c6ced9] bg-[#e7ebf1] p-1">
+              <div className="relative">
                 <Search className="pointer-events-none absolute left-1 top-[5px] h-3 w-3 text-muted-foreground" />
                 <Input
                   className="h-6 rounded-sm border-[#c6ced9] pl-5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
@@ -1733,7 +1744,7 @@ const DoctorDatabase = () => {
               </div>
             </div>
 
-            <div className="max-h-[calc(100vh-9rem)] overflow-y-auto p-1">
+            <div className="min-h-0 flex-1 overflow-y-auto p-1">
               {visiblePatients.map((patient) => {
                 const visitsForPatient = records.visits
                   .filter((visit) => visit.patientId === patient.id)
