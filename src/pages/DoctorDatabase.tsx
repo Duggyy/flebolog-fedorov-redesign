@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import {
   CalendarDays,
+  ChevronRight,
   Copy,
   Download,
   FileText,
@@ -604,6 +605,26 @@ const insertSuggestionWithSpacing = (currentValue: string, suggestion: string, s
   };
 };
 
+/**
+ * Плотность интерфейса задана общими классами, а не повторяется в каждом поле.
+ *
+ * Зачем. Строк в приёме около сорока, и на «воздушной» вёрстке (подпись сверху,
+ * поле снизу, отступ между ними) один приём занимал 4500 px — четыре с половиной
+ * экрана. В прототипе, с которого программа писалась, подпись стоит СЛЕВА от
+ * значения отдельной ячейкой, строки идут вплотную. Здесь то же самое: одна
+ * строка = одна сетка «подпись | значение».
+ *
+ * Ширина колонки подписи: 196 px на десктопе (в неё влезает
+ * «Немедикаментозная терапия, рекомендованные манипуляции» за три строки) и
+ * 132 px на узких экранах, где важнее место под значение.
+ */
+const rowClass =
+  "grid grid-cols-[132px_minmax(0,1fr)] border-b border-[#d7dce4] last:border-b-0 md:grid-cols-[196px_minmax(0,1fr)]";
+const labelCellClass =
+  "flex items-center border-r border-[#d7dce4] bg-[#eef1f5] px-1.5 py-[3px] text-[11px] font-normal leading-[1.2] text-[#3f4a5a]";
+const valueCellClass =
+  "rounded-none border-0 bg-white px-1.5 text-[12px] shadow-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50 focus-visible:ring-offset-0";
+
 const SuggestionPanel = ({
   label,
   suggestions,
@@ -622,66 +643,116 @@ const SuggestionPanel = ({
   onDelete: (value: string) => void;
   onPick: (value: string) => void;
   onClose: () => void;
-}) => (
-  <aside className="sticky top-4 flex max-h-[calc(100vh-2rem)] min-h-[520px] flex-col rounded-lg border bg-[#f1f3f6] shadow-sm">
-    <div className="flex items-start justify-between gap-3 border-b bg-[#e5e8ed] p-3">
-      <div>
-        <p className="text-xs font-semibold uppercase text-muted-foreground">Подсказки</p>
-        <h2 className="mt-1 text-base font-semibold leading-tight">{label}</h2>
+}) => {
+  const [filter, setFilter] = useState("");
+  const query = filter.trim().toLowerCase();
+  const visible = query ? suggestions.filter((item) => item.toLowerCase().includes(query)) : suggestions;
+
+  return (
+    <aside className="flex flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]">
+      <div className="flex items-center gap-1.5 border-b border-[#c6ced9] bg-[#dfe4ea] px-1.5 py-1">
+        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[#33405a]">Список подсказок</h2>
+        <span className="ml-auto rounded-sm bg-[#c9d2de] px-1 text-[10px] font-medium text-[#33405a]">
+          {visible.length}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Сбросить выбор поля"
+          className="rounded-sm p-0.5 text-[#5a6675] transition-colors hover:bg-white/60 hover:text-foreground"
+        >
+          <X className="h-3 w-3" />
+        </button>
       </div>
-      <Button type="button" size="sm" variant="ghost" onClick={onClose} aria-label="Закрыть подсказки">
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
-    {suggestions.length > 0 ? (
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-        {suggestions.map((suggestion) => (
-          <div key={suggestion} className="flex items-start gap-2 rounded-md border bg-white p-2 shadow-sm">
-            <button
-              type="button"
-              className="min-w-0 flex-1 rounded-sm px-2 py-1 text-left text-sm leading-5 hover:bg-muted"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onPick(suggestion)}
-            >
-              {suggestion}
-            </button>
-            <button
-              type="button"
-              className="rounded-sm px-2 py-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onDelete(suggestion)}
-              aria-label="Удалить подсказку"
-            >
-              x
-            </button>
+
+      {label ? (
+        <>
+          <p
+            className="truncate border-b border-[#d7dce4] bg-[#eef1f5] px-1.5 py-1 text-[11px] font-medium text-foreground"
+            title={label}
+          >
+            {label}
+          </p>
+          <div className="border-b border-[#d7dce4] p-1">
+            <Input
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Фильтр подсказок"
+              aria-label="Фильтр подсказок"
+              className="h-6 rounded-sm border-[#c6ced9] px-1.5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+            />
           </div>
-        ))}
-      </div>
-    ) : (
-      <p className="flex-1 p-4 text-sm text-muted-foreground">Подсказок пока нет.</p>
-    )}
-    <div className="border-t bg-[#e5e8ed] p-3">
-      <Label className="mb-1.5 block text-xs text-muted-foreground">Новая подсказка</Label>
-      <div className="flex gap-2">
-      <Input
-        className="h-9 text-sm"
-        value={phrase}
-        placeholder="Новая подсказка"
-        onChange={(event) => onPhraseChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter") {
-            event.preventDefault();
-            onAdd();
-          }
-        }}
-      />
-      <Button type="button" size="sm" variant="outline" onClick={onAdd}>
-        Добавить
-      </Button>
-      </div>
-    </div>
-  </aside>
-);
+          {/* Строки вплотную, без рамок и отступов между ними: в прототипе
+              список подсказок — это плотный текстовый столбец, а не карточки.
+              На экране 900 px так помещается около 40 подсказок вместо 12. */}
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {visible.length > 0 ? (
+              visible.map((suggestion) => (
+                <div
+                  key={suggestion}
+                  className="group flex items-start border-b border-[#e1e5eb] last:border-b-0 hover:bg-[#e3e9f2]"
+                >
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1 px-1.5 py-[2px] text-left text-[11px] leading-[1.25] text-foreground"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => onPick(suggestion)}
+                  >
+                    {suggestion}
+                  </button>
+                  <button
+                    type="button"
+                    className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => onDelete(suggestion)}
+                    aria-label={`Удалить подсказку: ${suggestion}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))
+            ) : (
+              <p className="px-1.5 py-1 text-[11px] text-muted-foreground">
+                {query ? "Ничего не найдено." : "Подсказок пока нет."}
+              </p>
+            )}
+          </div>
+          <div className="border-t border-[#c6ced9] bg-[#e7ebf1] p-1">
+            <div className="flex gap-1">
+              <Input
+                className="h-6 rounded-sm border-[#c6ced9] px-1.5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+                value={phrase}
+                placeholder="Новая подсказка"
+                aria-label="Новая подсказка"
+                onChange={(event) => onPhraseChange(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    onAdd();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onAdd}
+                className="h-6 shrink-0 px-2 text-[11px]"
+                aria-label="Добавить подсказку"
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        </>
+      ) : (
+        <p className="p-2 text-[11px] leading-snug text-muted-foreground">
+          Щёлкните по любому полю — здесь появится список подсказок для него.
+        </p>
+      )}
+    </aside>
+  );
+};
 
 const Field = ({
   label,
@@ -689,15 +760,19 @@ const Field = ({
   onChange,
   type = "text",
   onActivateSuggestions,
+  stacked = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
   onActivateSuggestions?: (target: SuggestionTarget) => void;
+  /** Подпись над полем вместо ячейки слева — для форм входа, где нет таблицы. */
+  stacked?: boolean;
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const valueRef = useRef(value);
+  const inputId = useId();
   const suggestionsEnabled = type === "text" && Boolean(onActivateSuggestions);
 
   useEffect(() => {
@@ -729,14 +804,18 @@ const Field = ({
   };
 
   return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
+    <div className={stacked ? "space-y-1.5" : rowClass}>
+      <Label htmlFor={inputId} className={stacked ? undefined : labelCellClass}>
+        {label}
+      </Label>
       <Input
+        id={inputId}
         ref={inputRef}
         type={type}
         value={value}
         onFocus={activateSuggestions}
         onChange={(event) => onChange(event.target.value)}
+        className={stacked ? undefined : `h-7 ${valueCellClass}`}
       />
     </div>
   );
@@ -757,6 +836,7 @@ const Area = ({
 }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const valueRef = useRef(value);
+  const textareaId = useId();
 
   const resizeTextarea = () => {
     const textarea = textareaRef.current;
@@ -799,13 +879,18 @@ const Area = ({
   };
 
   return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
+    <div className={rowClass}>
+      {/* `items-start pt-1` — чтобы подпись стояла на уровне первой строки
+          текста, а не по центру многострочного поля. */}
+      <Label htmlFor={textareaId} className={`${labelCellClass} items-start pt-1`}>
+        {label}
+      </Label>
       <Textarea
+        id={textareaId}
         ref={textareaRef}
         rows={rows}
         value={value}
-        className="min-h-10 resize-none overflow-hidden py-2 leading-5"
+        className={`min-h-7 resize-none overflow-hidden py-[7px] leading-[1.3] ${valueCellClass}`}
         onFocus={() => {
           activateSuggestions();
           resizeTextarea();
@@ -828,11 +913,12 @@ const RecordSection = ({
   children: ReactNode;
   defaultOpen?: boolean;
 }) => (
-  <details className="rounded-md border bg-[#f7f8fa] shadow-sm" open={defaultOpen}>
-    <summary className="cursor-pointer select-none rounded-t-md border-b bg-[#e5e8ed] px-3 py-2 text-sm font-semibold text-foreground marker:text-primary">
+  <details className="group rounded-sm border border-[#c6ced9] bg-white" open={defaultOpen}>
+    <summary className="flex cursor-pointer select-none list-none items-center gap-1 border-[#c6ced9] bg-[#dfe4ea] px-1.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-[#33405a] transition-colors hover:bg-[#d6dce5] group-open:border-b [&::-webkit-details-marker]:hidden">
+      <ChevronRight className="h-3 w-3 shrink-0 transition-transform group-open:rotate-90" />
       {title}
     </summary>
-    <div className="flex flex-col gap-3 p-3">{children}</div>
+    <div>{children}</div>
   </details>
 );
 
@@ -1535,8 +1621,8 @@ const DoctorDatabase = () => {
               </div>
             </div>
             <div className="space-y-4">
-              <Field onActivateSuggestions={activateSuggestionTarget} label="Логин" value={login} onChange={setLogin} />
-              <Field onActivateSuggestions={activateSuggestionTarget} label="Пароль" type="password" value={password} onChange={setPassword} />
+              <Field stacked onActivateSuggestions={activateSuggestionTarget} label="Логин" value={login} onChange={setLogin} />
+              <Field stacked onActivateSuggestions={activateSuggestionTarget} label="Пароль" type="password" value={password} onChange={setPassword} />
               <Button className="w-full" onClick={handleLogin}>
                 Войти
               </Button>
@@ -1551,47 +1637,53 @@ const DoctorDatabase = () => {
   }
 
   return (
-    <div className="min-h-screen bg-section-bg">
-      <ClinicBaseHeader />
-      <main className="container py-6">
-        <div className="mb-4 flex flex-col justify-between gap-3 rounded-lg border bg-[#d8dde5] p-4 shadow-sm md:flex-row md:items-center">
-          <div>
-            <h1 className="text-2xl font-semibold">База приемов</h1>
-            <p className="text-sm text-muted-foreground">
-              {doctor.name} · {doctor.speciality}
-              {hasUnsavedChanges && (
-                <span className="ml-2 rounded-sm bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
-                  есть несохраненные изменения
-                </span>
-              )}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={addPatient}>
-              <Plus className="mr-2 h-4 w-4" />
+    <div className="min-h-screen bg-[#e9edf2]">
+      <ClinicBaseHeader compact />
+      {/* Ширина не ограничена контейнером: в прототипе это окно программы на
+          весь экран, а `container` держал 1280 px — на 1920 px треть ширины
+          пустовала, а форма всё равно уезжала на четыре экрана вниз. */}
+      <main className="w-full px-2 py-1.5">
+        <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-[#c6ced9] bg-[#dfe4ea] px-2 py-1">
+          <h1 className="text-[13px] font-semibold text-foreground">База приёмов</h1>
+          <p className="text-[11px] text-muted-foreground">
+            {doctor.name} · {doctor.speciality}
+          </p>
+          {hasUnsavedChanges && (
+            <span className="rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+              есть несохранённые изменения
+            </span>
+          )}
+          <div className="ml-auto flex flex-wrap gap-1.5">
+            <Button variant="outline" size="sm" onClick={addPatient} className="h-6 px-2 text-[11px]">
+              <Plus className="mr-1 h-3 w-3" />
               Пациент
             </Button>
-            <Button variant="outline" size="sm" onClick={addVisit} disabled={!selectedPatient}>
-              <CalendarDays className="mr-2 h-4 w-4" />
-              Прием
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addVisit}
+              disabled={!selectedPatient}
+              className="h-6 px-2 text-[11px]"
+            >
+              <CalendarDays className="mr-1 h-3 w-3" />
+              Приём
             </Button>
           </div>
         </div>
 
-        <div
-          className={`grid gap-4 ${
-            activeSuggestionTarget
-              ? "lg:grid-cols-[320px_minmax(0,1fr)_minmax(240px,20vw)]"
-              : "lg:grid-cols-[320px_minmax(0,1fr)]"
-          }`}
-        >
-          <aside className="rounded-lg border bg-[#f1f3f6] shadow-sm">
-            <div className="border-b bg-[#e5e8ed] p-4">
-              <Label htmlFor="organization-select">Организация *</Label>
+        {/* Панель подсказок стоит на месте всегда, а не появляется при клике в
+            поле. Иначе при каждом фокусе форма переезжала: колонка то
+            появлялась, то исчезала, и текст под курсором сдвигался. */}
+        <div className="grid gap-1.5 xl:grid-cols-[248px_minmax(0,1fr)_300px]">
+          <aside className="rounded-sm border border-[#c6ced9] bg-[#f4f6f9]">
+            <div className="border-b border-[#c6ced9] bg-[#e7ebf1] p-1.5">
+              <Label htmlFor="organization-select" className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Организация *
+              </Label>
               <select
                 id="organization-select"
                 required
-                className="mt-1.5 h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                className="mt-0.5 h-6 w-full rounded-sm border border-[#c6ced9] bg-white px-1 text-[11px]"
                 value={activeOrganization}
                 onChange={(event) => {
                   requestProtectedAction((sourceRecords) =>
@@ -1606,10 +1698,15 @@ const DoctorDatabase = () => {
                 ))}
               </select>
 
-              <Label htmlFor="doctor-select">Врач</Label>
+              <Label
+                htmlFor="doctor-select"
+                className="mt-1 block text-[10px] uppercase tracking-wide text-muted-foreground"
+              >
+                Врач
+              </Label>
               <select
                 id="doctor-select"
-                className="mt-1.5 h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                className="mt-0.5 h-6 w-full rounded-sm border border-[#c6ced9] bg-white px-1 text-[11px]"
                 value={doctor.id}
                 onChange={(event) => {
                   const nextDoctor = doctors.find((item) => item.id === event.target.value) ?? doctor;
@@ -1624,18 +1721,19 @@ const DoctorDatabase = () => {
                   </option>
                 ))}
               </select>
-              <div className="relative mt-3">
-                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <div className="relative mt-1">
+                <Search className="pointer-events-none absolute left-1 top-[5px] h-3 w-3 text-muted-foreground" />
                 <Input
-                  className="pl-9"
+                  className="h-6 rounded-sm border-[#c6ced9] pl-5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
                   placeholder="Поиск пациента"
+                  aria-label="Поиск пациента"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </div>
             </div>
 
-            <div className="max-h-[620px] overflow-y-auto p-2">
+            <div className="max-h-[calc(100vh-9rem)] overflow-y-auto p-1">
               {visiblePatients.map((patient) => {
                 const visitsForPatient = records.visits
                   .filter((visit) => visit.patientId === patient.id)
@@ -1645,7 +1743,7 @@ const DoctorDatabase = () => {
                 const isSelectedPatient = selectedPatient?.id === patient.id;
                 const isExpandedPatient = expandedPatientIds.includes(patient.id);
                 return (
-                  <div key={patient.id} className="mb-2">
+                  <div key={patient.id} className="mb-1">
                     <button
                       type="button"
                       onClick={() => {
@@ -1661,30 +1759,30 @@ const DoctorDatabase = () => {
                           selectPatient(patient.id, sourceRecords),
                         );
                       }}
-                      className={`w-full rounded-md border p-3 text-left transition ${
+                      className={`w-full rounded-sm border px-1.5 py-1 text-left transition ${
                         isSelectedPatient
                           ? "border-primary bg-white"
-                          : "border-transparent bg-[#f7f8fa] hover:bg-white"
+                          : "border-[#dde2e9] bg-white hover:border-[#b9c4d3] hover:bg-[#f8fafc]"
                       }`}
                     >
-                      <span className="block font-medium">
+                      <span className="block text-[12px] font-medium leading-tight">
                         {patient.lastName} {patient.firstName} {patient.middleName}
                       </span>
-                      <span className="mt-1 block text-xs text-muted-foreground">
-                        {patient.phone || "Телефон не указан"} · приемов: {visitCount}
+                      <span className="mt-0.5 block text-[10px] leading-tight text-muted-foreground">
+                        {patient.phone || "Телефон не указан"} · приёмов: {visitCount}
                       </span>
                       {nearestNextVisitDate && (
-                        <span className="mt-1 block text-xs font-semibold text-red-600">
-                          Следующий прием: {nearestNextVisitDate}
+                        <span className="mt-0.5 block text-[10px] font-semibold leading-tight text-red-600">
+                          Следующий приём: {nearestNextVisitDate}
                         </span>
                       )}
                     </button>
 
                     {isExpandedPatient && (
-                      <div className="mt-2 overflow-hidden rounded-md border bg-white">
-                        <div className="grid grid-cols-[86px_1fr] gap-2 border-b bg-[#e5e8ed] px-3 py-2 text-xs font-semibold text-muted-foreground">
+                      <div className="mt-0.5 overflow-hidden rounded-sm border border-[#dde2e9] bg-white">
+                        <div className="grid grid-cols-[70px_1fr] gap-1 border-b border-[#dde2e9] bg-[#eef1f5] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
                           <span>Дата</span>
-                          <span>Прием</span>
+                          <span>Приём</span>
                         </div>
                         {visitsForPatient.length > 0 ? (
                           visitsForPatient.map((visit) => {
@@ -1704,7 +1802,7 @@ const DoctorDatabase = () => {
                                     selectVisit(visit.id);
                                   })
                                 }
-                                className={`grid w-full grid-cols-[86px_1fr] gap-2 px-3 py-2 text-left text-xs transition hover:bg-muted/70 ${
+                                className={`grid w-full grid-cols-[70px_1fr] gap-1 border-b border-[#eef1f5] px-1.5 py-1 text-left text-[11px] leading-tight transition last:border-b-0 hover:bg-muted/70 ${
                                   selectedVisitId === visit.id ? "bg-primary/10 text-primary" : ""
                                 }`}
                               >
@@ -1713,7 +1811,7 @@ const DoctorDatabase = () => {
                                   <span className="block truncate">{visit.consultationType}</span>
                                   {isNearestScheduledVisit && (
                                     <span className="mt-0.5 block font-semibold text-red-600">
-                                      Следующий прием: {nearestNextVisitDate}
+                                      Следующий приём: {nearestNextVisitDate}
                                     </span>
                                   )}
                                 </span>
@@ -1721,8 +1819,8 @@ const DoctorDatabase = () => {
                             );
                           })
                         ) : (
-                          <div className="px-3 py-3 text-xs text-muted-foreground">
-                            Приемов пока нет.
+                          <div className="px-1.5 py-1 text-[11px] text-muted-foreground">
+                            Приёмов пока нет.
                           </div>
                         )}
                       </div>
@@ -1733,30 +1831,31 @@ const DoctorDatabase = () => {
             </div>
           </aside>
 
-          <section className="min-w-0 rounded-lg border bg-[#f1f3f6] shadow-sm">
+          <section className="min-w-0 rounded-sm border border-[#c6ced9] bg-white">
             {selectedPatient && selectedVisit ? (
               <>
-                <div className="border-b p-4">
-                  <div className="flex flex-col justify-between gap-3 xl:flex-row xl:items-center">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-secondary/10 text-secondary">
-                        <UserRound className="h-5 w-5" />
+                <div className="border-b border-[#c6ced9] bg-[#eef1f5] px-1.5 py-1">
+                  <div className="flex flex-wrap items-center justify-between gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      <div className="flex h-6 w-6 items-center justify-center rounded-sm bg-secondary/10 text-secondary">
+                        <UserRound className="h-3.5 w-3.5" />
                       </div>
                       <div>
-                        <h2 className="text-xl font-semibold">
+                        <h2 className="text-[13px] font-semibold leading-tight">
                           {selectedPatient.lastName} {selectedPatient.firstName}{" "}
                           {selectedPatient.middleName}
                         </h2>
-                        <p className="text-sm text-muted-foreground">
+                        <p className="text-[10px] leading-tight text-muted-foreground">
                           {selectedVisit.recordDate} · {selectedVisit.consultationType}
                         </p>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap items-center gap-1">
                       <select
-                        className="h-9 rounded-md border border-input bg-white px-3 text-sm"
+                        className="h-6 rounded-sm border border-[#c6ced9] bg-white px-1 text-[11px]"
                         value={selectedVisitId}
                         onChange={(event) => setSelectedVisitId(event.target.value)}
+                        aria-label="Приём"
                       >
                         {patientVisits.map((visit) => (
                           <option key={visit.id} value={visit.id}>
@@ -1764,23 +1863,33 @@ const DoctorDatabase = () => {
                           </option>
                         ))}
                       </select>
-                      <Button variant="outline" size="sm" onClick={copyVisit}>
-                        <Copy className="mr-2 h-4 w-4" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={copyVisit}
+                        className="h-6 px-2 text-[11px]"
+                      >
+                        <Copy className="mr-1 h-3 w-3" />
                         Копировать
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => setPrintDialogOpen(true)}>
-                        <Printer className="mr-2 h-4 w-4" />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPrintDialogOpen(true)}
+                        className="h-6 px-2 text-[11px]"
+                      >
+                        <Printer className="mr-1 h-3 w-3" />
                         Печать
                       </Button>
-                      <Button size="sm" onClick={saveRecords}>
-                        <Save className="mr-2 h-4 w-4" />
+                      <Button size="sm" onClick={saveRecords} className="h-6 px-2 text-[11px]">
+                        <Save className="mr-1 h-3 w-3" />
                         Сохранить
                       </Button>
                     </div>
                   </div>
                 </div>
 
-                <div className="space-y-4 p-4">
+                <div className="space-y-1 p-1">
                   <RecordSection title="Пациент">
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Фамилия" value={selectedPatient.lastName} onChange={(value) => updatePatient("lastName", value)} />
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Имя" value={selectedPatient.firstName} onChange={(value) => updatePatient("firstName", value)} />
@@ -1789,17 +1898,18 @@ const DoctorDatabase = () => {
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Телефон" value={selectedPatient.phone} onChange={(value) => updatePatient("phone", value)} />
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Дата записи" type="date" value={selectedVisit.recordDate} onChange={(value) => updateVisit("recordDate", value)} />
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Полных лет" value={selectedVisit.ageAtVisit || getAgeAtDate(selectedPatient.birthDate, selectedVisit.recordDate)} onChange={(value) => updateVisit("ageAtVisit", value)} />
-                    <div className="md:col-span-2 xl:col-span-3">
-                      <Area onActivateSuggestions={activateSuggestionTarget} label="Адрес" value={selectedPatient.address} onChange={(value) => updatePatient("address", value)} />
-                    </div>
+                    <Area onActivateSuggestions={activateSuggestionTarget} label="Адрес" value={selectedPatient.address} onChange={(value) => updatePatient("address", value)} />
                   </RecordSection>
 
                   <RecordSection title="Осмотр">
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Врач" value={selectedVisit.doctorName} onChange={(value) => updateVisit("doctorName", value)} />
-                    <div className="space-y-1.5">
-                      <Label>Консультация врача</Label>
+                    <div className={rowClass}>
+                      <Label htmlFor="consultation-type" className={labelCellClass}>
+                        Консультация врача
+                      </Label>
                       <select
-                        className="h-10 w-full rounded-md border border-input bg-white px-3 text-sm"
+                        id="consultation-type"
+                        className={`h-7 ${valueCellClass}`}
                         value={selectedVisit.consultationType}
                         onChange={(event) => updateVisit("consultationType", event.target.value)}
                       >
@@ -1872,18 +1982,19 @@ const DoctorDatabase = () => {
             )}
           </section>
 
-          {activeSuggestionTarget && (
-            <SuggestionPanel
-              label={activeSuggestionTarget.label}
-              suggestions={activeSuggestions}
-              phrase={suggestionPhrase}
-              onPhraseChange={setSuggestionPhrase}
-              onAdd={addActiveSuggestion}
-              onDelete={deleteActiveSuggestion}
-              onPick={activeSuggestionTarget.insert}
-              onClose={() => setActiveSuggestionTarget(null)}
-            />
-          )}
+          {/* Панель рендерится всегда: при пустом выборе она показывает
+              подсказку «щёлкните по полю». Условный рендер заставлял сетку
+              менять число колонок на каждом фокусе — форма дёргалась. */}
+          <SuggestionPanel
+            label={activeSuggestionTarget?.label ?? ""}
+            suggestions={activeSuggestions}
+            phrase={suggestionPhrase}
+            onPhraseChange={setSuggestionPhrase}
+            onAdd={addActiveSuggestion}
+            onDelete={deleteActiveSuggestion}
+            onPick={(value) => activeSuggestionTarget?.insert(value)}
+            onClose={() => setActiveSuggestionTarget(null)}
+          />
         </div>
       </main>
       <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
