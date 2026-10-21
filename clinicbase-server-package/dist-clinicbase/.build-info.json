@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "81b990996561d7fa1edcabecc58aa0120844bee2",
-  "shortSha": "81b9909",
-  "subject": "Отзывы ПроДокторов: метка обновления от планового скрипта",
-  "builtAt": "2026-10-19T14:02:15.527Z",
+  "sha": "3ce0f93ed40da35fcbeebb348d81149c3dc5fa57",
+  "shortSha": "3ce0f93",
+  "subject": "ClinicBase: компоновка рабочего места врача ближе к прототипу",
+  "builtAt": "2026-10-21T21:33:59.387Z",
   "dirty": false
 }
