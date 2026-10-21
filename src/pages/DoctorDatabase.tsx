@@ -2,6 +2,8 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "re
 import type { ReactNode } from "react";
 import {
   CalendarDays,
+  Check,
+  ChevronDown,
   ChevronRight,
   Copy,
   Download,
@@ -20,6 +22,7 @@ import ClinicBaseHeader from "@/components/ClinicBaseHeader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -649,7 +652,10 @@ const SuggestionPanel = ({
   const visible = query ? suggestions.filter((item) => item.toLowerCase().includes(query)) : suggestions;
 
   return (
-    <aside className="flex flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]">
+    <aside
+      data-testid="suggestion-panel"
+      className="flex flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]"
+    >
       <div className="flex items-center gap-1.5 border-b border-[#c6ced9] bg-[#dfe4ea] px-1.5 py-1">
         <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[#33405a]">Список подсказок</h2>
         <span className="ml-auto rounded-sm bg-[#c9d2de] px-1 text-[10px] font-medium text-[#33405a]">
@@ -964,6 +970,141 @@ const PrintRecord = ({
   );
 };
 
+/**
+ * Выбор пациента — раскрывающийся список в верхней панели.
+ *
+ * Раньше пациенты занимали отдельную колонку слева: 248 px ширины и весь экран
+ * по высоте. Колонка отбирала место ровно у того, ради чего экран открывают —
+ * у полей истории болезни и у списка подсказок. При этом список нужен редко и
+ * короткими наскоками: врач выбрал пациента и дальше весь приём работает в
+ * форме. Поэтому выбор убран в выпадающее окно, а освободившееся место отдано
+ * форме.
+ *
+ * Поиск живёт внутри окна, а не в состоянии экрана: иначе набранный фильтр
+ * пережил бы закрытие и список открылся бы обрезанным — пациент «пропал» бы
+ * без видимой причины.
+ */
+const PatientPicker = ({
+  patients,
+  selectedPatientId,
+  visitCountByPatient,
+  nearestNextVisitByPatient,
+  onSelect,
+}: {
+  patients: Patient[];
+  selectedPatientId: string;
+  visitCountByPatient: Map<string, number>;
+  nearestNextVisitByPatient: Map<string, string>;
+  onSelect: (patientId: string) => void;
+}) => {
+  const [open, setOpen] = useState(false);
+  const [filter, setFilter] = useState("");
+
+  const selected = patients.find((patient) => patient.id === selectedPatientId);
+  const query = filter.trim().toLowerCase();
+  const visible = query
+    ? patients.filter((patient) =>
+        `${patient.lastName} ${patient.firstName} ${patient.middleName} ${patient.phone}`
+          .toLowerCase()
+          .includes(query),
+      )
+    : patients;
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (!nextOpen) setFilter("");
+  };
+
+  return (
+    <div className="flex items-center gap-1">
+      <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">Пациент</Label>
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            data-testid="patient-picker"
+            aria-label="Выбрать пациента"
+            className="flex h-6 w-[210px] items-center gap-1 rounded-sm border border-[#c6ced9] bg-white px-1 text-left text-[11px] transition-colors hover:border-[#a9b6c8]"
+          >
+            <UserRound className="h-3 w-3 shrink-0 text-muted-foreground" />
+            <span
+              className={`min-w-0 flex-1 truncate ${selected ? "" : "text-muted-foreground"}`}
+              title={
+                selected
+                  ? `${selected.lastName} ${selected.firstName} ${selected.middleName}`.trim()
+                  : undefined
+              }
+            >
+              {selected
+                ? `${selected.lastName} ${selected.firstName} ${selected.middleName}`.trim()
+                : "не выбран"}
+            </span>
+            <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          sideOffset={3}
+          className="w-[340px] rounded-sm border-[#c6ced9] p-0"
+        >
+          <div className="border-b border-[#c6ced9] bg-[#eef1f5] p-1">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-1 top-[7px] h-3 w-3 text-muted-foreground" />
+              <Input
+                autoFocus
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="Фамилия, имя или телефон"
+                aria-label="Поиск пациента"
+                className="h-6 rounded-sm border-[#c6ced9] bg-white pl-5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+              />
+            </div>
+          </div>
+          <div className="max-h-[330px] overflow-y-auto" data-testid="patient-picker-list">
+            {visible.length > 0 ? (
+              visible.map((patient) => {
+                const isSelected = patient.id === selectedPatientId;
+                const nextVisitDate = nearestNextVisitByPatient.get(patient.id) ?? "";
+                return (
+                  <button
+                    key={patient.id}
+                    type="button"
+                    onClick={() => {
+                      onSelect(patient.id);
+                      handleOpenChange(false);
+                    }}
+                    className={`flex w-full items-start gap-1 border-b border-[#e1e5eb] px-1.5 py-[3px] text-left transition-colors last:border-b-0 ${
+                      isSelected ? "bg-primary/10 text-primary" : "hover:bg-[#e3e9f2]"
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12px] leading-[1.25]">
+                        {patient.lastName} {patient.firstName} {patient.middleName}
+                      </span>
+                      <span className="block truncate text-[10px] leading-[1.25] text-muted-foreground">
+                        {patient.phone || "телефон не указан"} · приёмов:{" "}
+                        {visitCountByPatient.get(patient.id) ?? 0}
+                      </span>
+                      {nextVisitDate && (
+                        <span className="block truncate text-[10px] font-semibold leading-[1.25] text-red-600">
+                          Следующий приём: {nextVisitDate}
+                        </span>
+                      )}
+                    </span>
+                    {isSelected && <Check className="mt-[2px] h-3 w-3 shrink-0" />}
+                  </button>
+                );
+              })
+            ) : (
+              <p className="px-1.5 py-2 text-[11px] text-muted-foreground">Никого не найдено.</p>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+};
+
 const DoctorDatabase = () => {
   const { toast } = useToast();
   const [doctors, setDoctors] = useState(loadDoctorUsers);
@@ -974,7 +1115,6 @@ const DoctorDatabase = () => {
   const [records, setRecords] = useState(loadRecords);
   const [selectedPatientId, setSelectedPatientId] = useState(initialPatients[0]?.id ?? "");
   const [selectedVisitId, setSelectedVisitId] = useState(initialVisits[0]?.id ?? "");
-  const [search, setSearch] = useState("");
   const [printTemplates, setPrintTemplates] = useState(loadPrintTemplates);
   const [selectedPrintTemplateId, setSelectedPrintTemplateId] = useState(
     () => loadPrintTemplates()[0]?.id ?? defaultPrintTemplates[0].id,
@@ -983,7 +1123,6 @@ const DoctorDatabase = () => {
   const [templateSettingsOpen, setTemplateSettingsOpen] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
-  const [expandedPatientIds, setExpandedPatientIds] = useState<string[]>([]);
   const [activeSuggestionTarget, setActiveSuggestionTarget] = useState<SuggestionTarget | null>(null);
   const [suggestionPhrase, setSuggestionPhrase] = useState("");
   const [suggestionsByLabel, setSuggestionsByLabel] = useState(loadAllSuggestions);
@@ -1047,16 +1186,23 @@ const DoctorDatabase = () => {
     return nextDates;
   }, [records.patients, records.visits]);
 
-  const visiblePatients = useMemo(() => {
+  const visitCountByPatient = useMemo(() => {
+    const counts = new Map<string, number>();
+    records.visits.forEach((visit) => {
+      counts.set(visit.patientId, (counts.get(visit.patientId) ?? 0) + 1);
+    });
+    return counts;
+  }, [records.visits]);
+
+  // Пациенты врача в том же порядке, что в прототипе: сначала те, у кого
+  // назначен ближайший приём (по дате), затем по алфавиту. Фильтра по поиску
+  // здесь нет намеренно: поиск живёт внутри выпадающего списка, иначе
+  // набранный в поиске текст решал бы ещё и то, какого пациента показать
+  // в форме, — стоило не найти совпадения, и форма пустела.
+  const doctorPatients = useMemo(() => {
     if (!doctor) return [];
-    const query = search.trim().toLowerCase();
     return records.patients
       .filter((patient) => patient.doctorId === doctor.id)
-      .filter((patient) =>
-        `${patient.lastName} ${patient.firstName} ${patient.middleName} ${patient.phone}`
-          .toLowerCase()
-          .includes(query),
-      )
       .sort((a, b) => {
         const aNextDate = nearestNextVisitByPatient.get(a.id) ?? "";
         const bNextDate = nearestNextVisitByPatient.get(b.id) ?? "";
@@ -1070,20 +1216,7 @@ const DoctorDatabase = () => {
           "ru",
         );
       });
-  }, [doctor, nearestNextVisitByPatient, records.patients, search]);
-
-  useEffect(() => {
-    const scheduledPatientIds = visiblePatients
-      .filter((patient) => nearestNextVisitByPatient.has(patient.id))
-      .map((patient) => patient.id);
-    if (scheduledPatientIds.length === 0) return;
-
-    setExpandedPatientIds((currentIds) =>
-      Array.from(new Set([...currentIds, ...scheduledPatientIds])).filter((patientId) =>
-        visiblePatients.some((patient) => patient.id === patientId),
-      ),
-    );
-  }, [nearestNextVisitByPatient, visiblePatients]);
+  }, [doctor, nearestNextVisitByPatient, records.patients]);
 
   const organizations = useMemo(
     () =>
@@ -1104,7 +1237,7 @@ const DoctorDatabase = () => {
   );
 
   const selectedPatient =
-    records.patients.find((patient) => patient.id === selectedPatientId) ?? visiblePatients[0];
+    records.patients.find((patient) => patient.id === selectedPatientId) ?? doctorPatients[0];
 
   const patientVisits = useMemo(() => {
     if (!selectedPatient) return [];
@@ -1344,7 +1477,6 @@ const DoctorDatabase = () => {
     setDoctor(nextDoctor);
     setSelectedOrganization(nextDoctor.organization);
     setSelectedPatientId(firstPatient?.id ?? "");
-    setExpandedPatientIds([]);
     setSelectedVisitId(
       sourceRecords.visits.find((visit) => visit.patientId === firstPatient?.id)?.id ?? "",
     );
@@ -1367,7 +1499,6 @@ const DoctorDatabase = () => {
     setDoctor(null);
     setSelectedPatientId("");
     setSelectedVisitId("");
-    setExpandedPatientIds([]);
   };
 
   const selectPatient = (
@@ -1375,7 +1506,6 @@ const DoctorDatabase = () => {
     sourceRecords: { patients: Patient[]; visits: Visit[] } = records,
   ) => {
     setSelectedPatientId(patientId);
-    setExpandedPatientIds((currentIds) => currentIds.filter((id) => id !== patientId));
     setSelectedVisitId(
       sourceRecords.visits
         .filter((visit) => visit.patientId === patientId)
@@ -1415,7 +1545,6 @@ const DoctorDatabase = () => {
     });
     setSelectedPatientId(patient.id);
     setSelectedVisitId(visit.id);
-    setExpandedPatientIds([]);
   };
 
   const addVisit = () => {
@@ -1439,7 +1568,6 @@ const DoctorDatabase = () => {
     };
     updateDraftRecords({ ...currentRecords, visits: [...currentRecords.visits, visit] });
     setSelectedVisitId(visit.id);
-    setExpandedPatientIds((currentIds) => Array.from(new Set([...currentIds, selectedPatient.id])));
   };
 
   const copyVisit = () => {
@@ -1705,6 +1833,20 @@ const DoctorDatabase = () => {
             </select>
           </div>
 
+          {/* Пациент — тоже контекст экрана, а не отдельная колонка: выбрал
+              один раз и весь приём работаешь в форме. Кнопки «Пациент» и
+              «Приём» стоят справа от селектора, потому что действуют на того,
+              кто в нём выбран. */}
+          <PatientPicker
+            patients={doctorPatients}
+            selectedPatientId={selectedPatient?.id ?? ""}
+            visitCountByPatient={visitCountByPatient}
+            nearestNextVisitByPatient={nearestNextVisitByPatient}
+            onSelect={(patientId) => {
+              requestProtectedAction((sourceRecords) => selectPatient(patientId, sourceRecords));
+            }}
+          />
+
           <div className="ml-auto flex flex-wrap gap-1.5">
             <Button variant="outline" size="sm" onClick={addPatient} className="h-6 px-2 text-[11px]">
               <Plus className="mr-1 h-3 w-3" />
@@ -1725,124 +1867,17 @@ const DoctorDatabase = () => {
 
         {/* Панель подсказок стоит на месте всегда, а не появляется при клике в
             поле. Иначе при каждом фокусе форма переезжала: колонка то
-            появлялась, то исчезала, и текст под курсором сдвигался. */}
-        <div className="grid gap-1.5 xl:grid-cols-[248px_minmax(0,1fr)_300px]">
-          {/* Колонка пациентов закреплена так же, как подсказки: при прокрутке
-              длинной истории болезни список остаётся на виду, а не уезжает
-              вверх вместе с формой. */}
-          <aside className="flex flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]">
-            <div className="border-b border-[#c6ced9] bg-[#e7ebf1] p-1">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-1 top-[5px] h-3 w-3 text-muted-foreground" />
-                <Input
-                  className="h-6 rounded-sm border-[#c6ced9] pl-5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
-                  placeholder="Поиск пациента"
-                  aria-label="Поиск пациента"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                />
-              </div>
-            </div>
+            появлялась, то исчезала, и текст под курсором сдвигался.
 
-            <div className="min-h-0 flex-1 overflow-y-auto p-1">
-              {visiblePatients.map((patient) => {
-                const visitsForPatient = records.visits
-                  .filter((visit) => visit.patientId === patient.id)
-                  .sort((a, b) => b.recordDate.localeCompare(a.recordDate));
-                const visitCount = visitsForPatient.length;
-                const nearestNextVisitDate = nearestNextVisitByPatient.get(patient.id) ?? "";
-                const isSelectedPatient = selectedPatient?.id === patient.id;
-                const isExpandedPatient = expandedPatientIds.includes(patient.id);
-                return (
-                  <div key={patient.id} className="mb-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isSelectedPatient) {
-                          setExpandedPatientIds((currentIds) =>
-                            isExpandedPatient
-                              ? currentIds.filter((id) => id !== patient.id)
-                              : [...currentIds, patient.id],
-                          );
-                          return;
-                        }
-                        requestProtectedAction((sourceRecords) =>
-                          selectPatient(patient.id, sourceRecords),
-                        );
-                      }}
-                      className={`w-full rounded-sm border px-1.5 py-1 text-left transition ${
-                        isSelectedPatient
-                          ? "border-primary bg-white"
-                          : "border-[#dde2e9] bg-white hover:border-[#b9c4d3] hover:bg-[#f8fafc]"
-                      }`}
-                    >
-                      <span className="block text-[12px] font-medium leading-tight">
-                        {patient.lastName} {patient.firstName} {patient.middleName}
-                      </span>
-                      <span className="mt-0.5 block text-[10px] leading-tight text-muted-foreground">
-                        {patient.phone || "Телефон не указан"} · приёмов: {visitCount}
-                      </span>
-                      {nearestNextVisitDate && (
-                        <span className="mt-0.5 block text-[10px] font-semibold leading-tight text-red-600">
-                          Следующий приём: {nearestNextVisitDate}
-                        </span>
-                      )}
-                    </button>
+            Колонки пациентов здесь больше нет: выбор пациента переехал
+            в выпадающий список верхней панели. Освободившиеся 248 px отданы
+            полям истории болезни — ради них экран и открывают. */}
+        <div className="grid gap-1.5 xl:grid-cols-[minmax(0,1fr)_300px]">
 
-                    {isExpandedPatient && (
-                      <div className="mt-0.5 overflow-hidden rounded-sm border border-[#dde2e9] bg-white">
-                        <div className="grid grid-cols-[70px_1fr] gap-1 border-b border-[#dde2e9] bg-[#eef1f5] px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">
-                          <span>Дата</span>
-                          <span>Приём</span>
-                        </div>
-                        {visitsForPatient.length > 0 ? (
-                          visitsForPatient.map((visit) => {
-                            const isNearestScheduledVisit =
-                              Boolean(nearestNextVisitDate) &&
-                              visit.nextVisitDate === nearestNextVisitDate;
-
-                            return (
-                              <button
-                                key={visit.id}
-                                type="button"
-                                onClick={() =>
-                                  requestProtectedAction((sourceRecords) => {
-                                    recordsRef.current = sourceRecords;
-                                    setRecords(sourceRecords);
-                                    setSelectedPatientId(patient.id);
-                                    selectVisit(visit.id);
-                                  })
-                                }
-                                className={`grid w-full grid-cols-[70px_1fr] gap-1 border-b border-[#eef1f5] px-1.5 py-1 text-left text-[11px] leading-tight transition last:border-b-0 hover:bg-muted/70 ${
-                                  selectedVisitId === visit.id ? "bg-primary/10 text-primary" : ""
-                                }`}
-                              >
-                                <span className="font-medium">{visit.recordDate}</span>
-                                <span className="min-w-0">
-                                  <span className="block truncate">{visit.consultationType}</span>
-                                  {isNearestScheduledVisit && (
-                                    <span className="mt-0.5 block font-semibold text-red-600">
-                                      Следующий приём: {nearestNextVisitDate}
-                                    </span>
-                                  )}
-                                </span>
-                              </button>
-                            );
-                          })
-                        ) : (
-                          <div className="px-1.5 py-1 text-[11px] text-muted-foreground">
-                            Приёмов пока нет.
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </aside>
-
-          <section className="min-w-0 rounded-sm border border-[#c6ced9] bg-white">
+          <section
+            data-testid="record-form"
+            className="min-w-0 rounded-sm border border-[#c6ced9] bg-white"
+          >
             {selectedPatient && selectedVisit ? (
               <>
                 <div className="border-b border-[#c6ced9] bg-[#eef1f5] px-1.5 py-1">
@@ -1988,8 +2023,20 @@ const DoctorDatabase = () => {
                   className="screen-hidden-print-copy"
                 />
               </>
+            ) : selectedPatient ? (
+              // Пациент выбран, но приёмов у него ещё нет — раньше на этом
+              // месте стояло «Выберите или создайте пациента», хотя пациент
+              // уже выбран. Теперь выбор идёт из выпадающего списка, и такое
+              // сообщение читалось бы как сбой.
+              <div className="p-8 text-center text-[12px] leading-relaxed text-muted-foreground">
+                У пациента {selectedPatient.lastName} {selectedPatient.firstName} ещё нет приёмов.
+                <br />
+                Нажмите «Приём» в верхней панели, чтобы создать первый.
+              </div>
             ) : (
-              <div className="p-8 text-center text-muted-foreground">Выберите или создайте пациента.</div>
+              <div className="p-8 text-center text-[12px] text-muted-foreground">
+                Выберите или создайте пациента.
+              </div>
             )}
           </section>
 
