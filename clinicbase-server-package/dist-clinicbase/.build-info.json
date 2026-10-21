@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "64bab5d6e7c05221fcee547cb1cbbde64395fa87",
-  "shortSha": "64bab5d",
-  "subject": "ClinicBase: левой колонки нет, пациенты — в выпадающем списке",
-  "builtAt": "2026-10-21T23:00:17.357Z",
-  "dirty": false
+  "sha": "01f5cae69658c4e02a3fcc1a0c6fef80346a2066",
+  "shortSha": "01f5cae",
+  "subject": "Пакет ClinicBase: перештампован под 64bab5d",
+  "builtAt": "2026-10-21T23:08:18.523Z",
+  "dirty": true
 }
