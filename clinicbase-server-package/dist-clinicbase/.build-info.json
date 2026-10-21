@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "3ce0f93ed40da35fcbeebb348d81149c3dc5fa57",
-  "shortSha": "3ce0f93",
-  "subject": "ClinicBase: компоновка рабочего места врача ближе к прототипу",
-  "builtAt": "2026-10-21T21:33:59.387Z",
+  "sha": "75e0630003a50aca60bf50e21e1e1de9faca819b",
+  "shortSha": "75e0630",
+  "subject": "ClinicBase: организация и врач переехали в верхнюю панель",
+  "builtAt": "2026-10-21T22:35:26.224Z",
   "dirty": false
 }
