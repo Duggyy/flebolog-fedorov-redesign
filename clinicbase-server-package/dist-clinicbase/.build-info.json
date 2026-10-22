@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "224fde11a44b5648aec0e6f9ce5cd0e754a511c5",
-  "shortSha": "224fde1",
-  "subject": "Пакет ClinicBase: перештампован под 0624b1c",
-  "builtAt": "2026-10-22T09:05:24.495Z",
+  "sha": "193e6d65b690526c8cb99b20aeda6f43da09227a",
+  "shortSha": "193e6d6",
+  "subject": "ClinicBase: график приёмов, время приёма и перетаскиваемая ширина панели",
+  "builtAt": "2026-10-22T09:14:19.873Z",
   "dirty": true
 }
