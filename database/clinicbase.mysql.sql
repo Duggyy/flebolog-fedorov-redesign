@@ -35,6 +35,7 @@ CREATE TABLE visits (
   patient_id VARCHAR(64) NOT NULL,
   doctor_id VARCHAR(64) NOT NULL,
   record_date DATE NOT NULL,
+  record_time TIME NULL,
   age_at_visit SMALLINT UNSIGNED NULL,
   doctor_name VARCHAR(180) NULL,
   consultation_type VARCHAR(180) NULL,

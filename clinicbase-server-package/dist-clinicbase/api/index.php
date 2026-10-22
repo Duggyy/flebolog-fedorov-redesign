@@ -413,6 +413,7 @@ function visit_to_client(array $visit): array
         'patientId' => 'patient_id',
         'doctorId' => 'doctor_id',
         'recordDate' => 'record_date',
+        'recordTime' => 'record_time',
         'ageAtVisit' => 'age_at_visit',
         'doctorName' => 'doctor_name',
         'consultationType' => 'consultation_type',
@@ -492,6 +493,7 @@ function upsert_visit(PDO $pdo, array $visit): void
         'patientId' => 'patient_id',
         'doctorId' => 'doctor_id',
         'recordDate' => 'record_date',
+        'recordTime' => 'record_time',
         'ageAtVisit' => 'age_at_visit',
         'doctorName' => 'doctor_name',
         'consultationType' => 'consultation_type',
@@ -535,7 +537,7 @@ function upsert_visit(PDO $pdo, array $visit): void
     $values = [];
     foreach ($fields as $clientKey => $dbKey) {
         $value = $visit[$clientKey] ?? '';
-        if (in_array($dbKey, ['record_date', 'next_visit_date'], true)) {
+        if (in_array($dbKey, ['record_date', 'record_time', 'next_visit_date'], true)) {
             $value = null_if_empty($value);
         }
         if ($dbKey === 'age_at_visit') {

@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   CalendarDays,
   Check,
@@ -62,6 +62,12 @@ type Visit = {
   patientId: string;
   doctorId: string;
   recordDate: string;
+  /**
+   * Время приёма в формате ЧЧ:ММ. В прототипе график показывает «Дата · Время ·
+   * Доктор · Протокол», и без времени две записи одного дня не различить.
+   * У старых записей поля нет — читаем как пустую строку.
+   */
+  recordTime: string;
   ageAtVisit: string;
   doctorName: string;
   consultationType: string;
@@ -294,11 +300,15 @@ const defaultPrintTemplates: PrintTemplate[] = [
   },
 ];
 
+/** Текущее время в ЧЧ:ММ — для нового приёма. toTimeString даёт «ЧЧ:ММ:СС …». */
+const currentTime = () => new Date().toTimeString().slice(0, 5);
+
 const emptyVisit = (doctor: DoctorUser, patientId: string): Visit => ({
   id: crypto.randomUUID(),
   patientId,
   doctorId: doctor.id,
   recordDate: new Date().toISOString().slice(0, 10),
+  recordTime: currentTime(),
   ageAtVisit: "",
   doctorName: doctor.name,
   consultationType: primaryConsultationType,
@@ -376,6 +386,7 @@ const initialVisits: Visit[] = [
     ...emptyVisit(initialDoctors[0], "patient-1"),
     id: "visit-1",
     recordDate: "2026-05-26",
+    recordTime: "12:24",
     ageAtVisit: "48",
     complaints: "Тяжесть в ногах к вечеру, отечность голеней.",
     diseaseHistory: "Симптомы отмечает около 3 лет, усилились за последние месяцы.",
@@ -395,6 +406,32 @@ const initialVisits: Visit[] = [
     recommendations: "Контрольный осмотр после дообследования.",
     nextVisitDate: "2026-06-10",
   },
+  // Второй приём того же врача — чтобы в графике было что копировать.
+  {
+    ...emptyVisit(initialDoctors[0], "patient-1"),
+    id: "visit-2",
+    recordDate: "2026-06-10",
+    recordTime: "09:32",
+    ageAtVisit: "48",
+    consultationType: "Консультация флеболога",
+    complaints: "Тяжесть в ногах уменьшилась, отёк к вечеру сохраняется.",
+    localExam: "Варикозно расширенные притоки без отрицательной динамики.",
+    diagnosisMain: "Варикозная болезнь нижних конечностей.",
+    diagnosisCode: "I83.9",
+    recommendations: "Продолжить компрессионный режим.",
+  },
+  // Приём другого врача у того же пациента: в графике он показывается
+  // розовым и не открывается — раскрыть его может только автор записи.
+  {
+    ...emptyVisit(initialDoctors[1], "patient-1"),
+    id: "visit-3",
+    recordDate: "2026-06-03",
+    recordTime: "16:08",
+    ageAtVisit: "48",
+    consultationType: "УЗИ вен нижних конечностей",
+    ultrasoundDevice: "Mindray DC-80",
+    ultrasoundConclusion: "Эхопризнаки варикозной болезни правой нижней конечности.",
+  },
 ];
 
 const mergeVisitsByPatientAndDate = (visits: Visit[], preferredVisitId = "") => {
@@ -406,7 +443,9 @@ const mergeVisitsByPatientAndDate = (visits: Visit[], preferredVisitId = "") => 
 
   const mergedVisits = Array.from(groupedVisits.values()).map((group) => {
     const preferredVisit = group.find((visit) => visit.id === preferredVisitId);
-    const baseVisit = { ...(preferredVisit ?? group[group.length - 1]) };
+    // recordTime добавлен позже остальных полей: у записей, сохранённых до
+    // этого, его нет. Подставляем пустую строку, чтобы тип не врал.
+    const baseVisit = { recordTime: "", ...(preferredVisit ?? group[group.length - 1]) };
 
     group.forEach((visit) => {
       (Object.keys(baseVisit) as Array<keyof Visit>).forEach((field) => {
@@ -628,6 +667,254 @@ const labelCellClass =
 const valueCellClass =
   "rounded-none border-0 bg-white px-1.5 text-[12px] shadow-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary/50 focus-visible:ring-offset-0";
 
+type PanelMode = "dictionary" | "schedule";
+
+const panelModeStorageKey = "clinicbase-panel-mode-v1";
+const panelWidthStorageKey = "clinicbase-panel-width-v1";
+const PANEL_MIN_WIDTH = 260;
+
+/** Режим правой области помнится: врач открывает программу в своём режиме. */
+const loadPanelMode = (): PanelMode =>
+  localStorage.getItem(panelModeStorageKey) === "schedule" ? "schedule" : "dictionary";
+
+const loadPanelWidth = () => {
+  const saved = Number(localStorage.getItem(panelWidthStorageKey));
+  return Number.isFinite(saved) && saved >= PANEL_MIN_WIDTH ? saved : 300;
+};
+
+/**
+ * Ручка ширины панели. Тянется мышью и стрелками с клавиатуры: без клавиатуры
+ * разделитель недоступен тем, кто работает без мыши, а это ещё и требование
+ * доступности для role="separator".
+ */
+const PanelResizer = ({
+  width,
+  onChange,
+}: {
+  width: number;
+  onChange: (next: number) => void;
+}) => {
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const clamp = (value: number) =>
+    Math.max(PANEL_MIN_WIDTH, Math.min(Math.round(value), Math.round(window.innerWidth * 0.5)));
+
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Ширина панели"
+      aria-valuenow={width}
+      aria-valuemin={PANEL_MIN_WIDTH}
+      aria-valuemax={Math.round(window.innerWidth * 0.5)}
+      tabIndex={0}
+      data-testid="panel-resizer"
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        dragRef.current = { startX: event.clientX, startWidth: width };
+      }}
+      onPointerMove={(event) => {
+        if (!dragRef.current) return;
+        // Тянем влево — панель шире, поэтому дельта вычитается.
+        onChange(clamp(dragRef.current.startWidth - (event.clientX - dragRef.current.startX)));
+      }}
+      onPointerUp={(event) => {
+        dragRef.current = null;
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }}
+      onPointerCancel={() => {
+        dragRef.current = null;
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "ArrowLeft") {
+          event.preventDefault();
+          onChange(clamp(width + 16));
+        } else if (event.key === "ArrowRight") {
+          event.preventDefault();
+          onChange(clamp(width - 16));
+        }
+      }}
+      className="group hidden cursor-col-resize items-stretch justify-center rounded-sm focus-visible:bg-[#c6ced9] focus-visible:outline-none xl:flex"
+    >
+      <span className="w-[2px] bg-transparent transition-colors group-hover:bg-[#9aa6b6]" />
+    </div>
+  );
+};
+
+/** «2026-06-10» → «10.06.2026». В графике дата нужна в привычном виде. */
+const formatDateRu = (value: string) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : value || "—";
+};
+
+/**
+ * Шапка правой области. Одна на два режима, иначе подпись режима и
+ * переключатель пришлось бы дублировать, и они разъехались бы.
+ */
+const PanelHeader = ({
+  title,
+  count,
+  mode,
+  onToggleMode,
+  onReset,
+}: {
+  title: string;
+  count?: number;
+  mode: PanelMode;
+  onToggleMode: () => void;
+  onReset?: () => void;
+}) => (
+  <div className="flex items-center gap-1 border-b border-[#c6ced9] bg-[#dfe4ea] px-1.5 py-1">
+    <h2 className="shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[#33405a]">{title}</h2>
+    {count !== undefined ? (
+      <span className="ml-auto rounded-sm bg-[#c9d2de] px-1 text-[10px] font-medium text-[#33405a]">
+        {count}
+      </span>
+    ) : null}
+    <button
+      type="button"
+      onClick={onToggleMode}
+      aria-pressed={mode === "schedule"}
+      data-testid="panel-mode-toggle"
+      title={mode === "schedule" ? "Показать справочники" : "Показать график приёмов"}
+      className={`rounded-sm border px-1 text-[10px] leading-[15px] transition-colors ${
+        count === undefined ? "ml-auto" : ""
+      } ${
+        mode === "schedule"
+          ? "border-[#185fa5] bg-[#e6f1fb] text-[#0c447c]"
+          : "border-[#c6ced9] bg-white text-[#5a6675] hover:text-foreground"
+      }`}
+    >
+      Информация
+    </button>
+    {onReset ? (
+      <button
+        type="button"
+        onClick={onReset}
+        aria-label="Сбросить выбор поля"
+        className="rounded-sm p-0.5 text-[#5a6675] transition-colors hover:bg-white/60 hover:text-foreground"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    ) : null}
+  </div>
+);
+
+/**
+ * График — расписание приёмов пациента. Второй режим области «Информация».
+ *
+ * Приёмы другого врача показываются розовым и не открываются: раскрыть запись
+ * может только тот, кто её вёл. Поэтому у такой строки нет ни клика, ни
+ * двойного клика, а в подсказке написано почему.
+ */
+const SchedulePanel = ({
+  visits,
+  doctorId,
+  selectedVisitId,
+  onSelect,
+  onOpen,
+  onCopyProtocol,
+  onToggleMode,
+}: {
+  visits: Visit[];
+  doctorId: string;
+  selectedVisitId: string;
+  onSelect: (visitId: string) => void;
+  onOpen: (visitId: string) => void;
+  onCopyProtocol: (visitId: string) => void;
+  onToggleMode: () => void;
+}) => {
+  const selected = visits.find((visit) => visit.id === selectedVisitId) ?? null;
+  const canCopy = Boolean(selected) && selected?.doctorId === doctorId;
+
+  return (
+    <aside
+      data-testid="schedule-panel"
+      className="flex min-w-0 flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]"
+    >
+      <PanelHeader title="График" mode="schedule" onToggleMode={onToggleMode} />
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* Четыре колонки в 300 px не читаются: «10.06.2026» обрезается до
+            «10.06.20…». Поэтому строка двухстрочная — дата, время и врач
+            сверху, протокол снизу. Поля те же, что в прототипе, но без
+            горизонтальной прокрутки. */}
+        <div className="flex items-center gap-1 border-b border-[#c6ced9] bg-[#eef1f5] px-1.5 py-0.5 text-[10px] font-semibold text-[#3f4a5a]">
+          <span>Дата</span>
+          <span>Время</span>
+          <span className="ml-auto">Доктор</span>
+        </div>
+        {visits.map((visit) => {
+          const foreign = visit.doctorId !== doctorId;
+          const active = visit.id === selectedVisitId;
+          return (
+            <div
+              key={visit.id}
+              data-testid="schedule-row"
+              data-foreign={foreign ? "true" : "false"}
+              data-active={active ? "true" : "false"}
+              onClick={() => {
+                if (!foreign) onSelect(visit.id);
+              }}
+              onDoubleClick={() => {
+                if (!foreign) onOpen(visit.id);
+              }}
+              title={
+                foreign
+                  ? "Приём другого врача — открыть может только он"
+                  : "Двойной щелчок — открыть приём"
+              }
+              className={`border-b border-[#e1e5eb] px-1.5 py-[3px] text-[10px] leading-tight ${
+                foreign
+                  ? "cursor-not-allowed bg-[#f7dce5] text-[#8a3a52]"
+                  : "cursor-pointer hover:bg-[#e3e9f2]"
+              } ${active && !foreign ? "bg-[#cfe3f7]" : ""}`}
+            >
+              <div className="flex items-baseline gap-1">
+                <span className="font-medium">{formatDateRu(visit.recordDate)}</span>
+                <span className="text-[#5a6675]">{visit.recordTime || "—"}</span>
+                <span className="ml-auto min-w-0 truncate" title={visit.doctorName}>
+                  {visit.doctorName}
+                </span>
+              </div>
+              <div className="truncate text-[#3f4a5a]" title={visit.consultationType}>
+                {visit.consultationType || "—"}
+              </div>
+            </div>
+          );
+        })}
+        {visits.length === 0 ? (
+          <p className="px-1.5 py-2 text-[11px] text-muted-foreground">Приёмов пока нет.</p>
+        ) : null}
+      </div>
+
+      <div className="border-t border-[#c6ced9] bg-[#e7ebf1] p-1">
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          disabled={!canCopy}
+          data-testid="copy-protocol"
+          onClick={() => {
+            if (selected) onCopyProtocol(selected.id);
+          }}
+          className="h-6 w-full px-2 text-[11px]"
+        >
+          <Copy className="mr-1 h-3 w-3" />
+          Копировать протокол
+        </Button>
+        <p className="mt-1 text-[10px] leading-snug text-[#5a6675]">
+          {!selected
+            ? "Нет приёма, который можно скопировать."
+            : !canCopy
+              ? "Протокол другого врача скопировать нельзя."
+              : "Создастся новый приём: текущий и выбранный не изменятся."}
+        </p>
+      </div>
+    </aside>
+  );
+};
+
 const SuggestionPanel = ({
   label,
   suggestions,
@@ -637,6 +924,7 @@ const SuggestionPanel = ({
   onDelete,
   onPick,
   onClose,
+  onToggleMode,
 }: {
   label: string;
   suggestions: string[];
@@ -646,6 +934,7 @@ const SuggestionPanel = ({
   onDelete: (value: string) => void;
   onPick: (value: string) => void;
   onClose: () => void;
+  onToggleMode: () => void;
 }) => {
   const [filter, setFilter] = useState("");
   const query = filter.trim().toLowerCase();
@@ -654,22 +943,15 @@ const SuggestionPanel = ({
   return (
     <aside
       data-testid="suggestion-panel"
-      className="flex flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]"
+      className="flex min-w-0 flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]"
     >
-      <div className="flex items-center gap-1.5 border-b border-[#c6ced9] bg-[#dfe4ea] px-1.5 py-1">
-        <h2 className="text-[11px] font-semibold uppercase tracking-wide text-[#33405a]">Список подсказок</h2>
-        <span className="ml-auto rounded-sm bg-[#c9d2de] px-1 text-[10px] font-medium text-[#33405a]">
-          {visible.length}
-        </span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Сбросить выбор поля"
-          className="rounded-sm p-0.5 text-[#5a6675] transition-colors hover:bg-white/60 hover:text-foreground"
-        >
-          <X className="h-3 w-3" />
-        </button>
-      </div>
+      <PanelHeader
+        title="Справочники"
+        count={visible.length}
+        mode="dictionary"
+        onToggleMode={onToggleMode}
+        onReset={onClose}
+      />
 
       {label ? (
         <>
@@ -683,14 +965,14 @@ const SuggestionPanel = ({
             <Input
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              placeholder="Фильтр подсказок"
-              aria-label="Фильтр подсказок"
+              placeholder="Фильтр справочника"
+              aria-label="Фильтр справочника"
               className="h-6 rounded-sm border-[#c6ced9] px-1.5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
             />
           </div>
           {/* Строки вплотную, без рамок и отступов между ними: в прототипе
-              список подсказок — это плотный текстовый столбец, а не карточки.
-              На экране 900 px так помещается около 40 подсказок вместо 12. */}
+              справочник — это плотный текстовый столбец, а не карточки.
+              На экране 900 px так помещается около 40 записей вместо 12. */}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {visible.length > 0 ? (
               visible.map((suggestion) => (
@@ -711,7 +993,7 @@ const SuggestionPanel = ({
                     className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={() => onDelete(suggestion)}
-                    aria-label={`Удалить подсказку: ${suggestion}`}
+                    aria-label={`Удалить запись: ${suggestion}`}
                   >
                     ×
                   </button>
@@ -719,7 +1001,7 @@ const SuggestionPanel = ({
               ))
             ) : (
               <p className="px-1.5 py-1 text-[11px] text-muted-foreground">
-                {query ? "Ничего не найдено." : "Подсказок пока нет."}
+                {query ? "Ничего не найдено." : "Записей пока нет."}
               </p>
             )}
           </div>
@@ -728,8 +1010,8 @@ const SuggestionPanel = ({
               <Input
                 className="h-6 rounded-sm border-[#c6ced9] px-1.5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
                 value={phrase}
-                placeholder="Новая подсказка"
-                aria-label="Новая подсказка"
+                placeholder="Новая запись"
+                aria-label="Новая запись"
                 onChange={(event) => onPhraseChange(event.target.value)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
@@ -744,7 +1026,7 @@ const SuggestionPanel = ({
                 variant="outline"
                 onClick={onAdd}
                 className="h-6 shrink-0 px-2 text-[11px]"
-                aria-label="Добавить подсказку"
+                aria-label="Добавить запись"
               >
                 <Plus className="h-3 w-3" />
               </Button>
@@ -753,7 +1035,7 @@ const SuggestionPanel = ({
         </>
       ) : (
         <p className="p-2 text-[11px] leading-snug text-muted-foreground">
-          Щёлкните по любому полю — здесь появится список подсказок для него.
+          Щёлкните по любому полю — здесь появятся записи справочника для него.
         </p>
       )}
     </aside>
@@ -1125,9 +1407,27 @@ const DoctorDatabase = () => {
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [activeSuggestionTarget, setActiveSuggestionTarget] = useState<SuggestionTarget | null>(null);
   const [suggestionPhrase, setSuggestionPhrase] = useState("");
+  const [panelMode, setPanelMode] = useState<PanelMode>(loadPanelMode);
+  const [panelWidth, setPanelWidth] = useState(loadPanelWidth);
+  const [scheduleSelectionId, setScheduleSelectionId] = useState("");
   const [suggestionsByLabel, setSuggestionsByLabel] = useState(loadAllSuggestions);
   const recordsRef = useRef(records);
   const pendingActionRef = useRef<((sourceRecords: MedicalRecords) => void) | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem(panelModeStorageKey, panelMode);
+  }, [panelMode]);
+
+  useEffect(() => {
+    localStorage.setItem(panelWidthStorageKey, String(panelWidth));
+  }, [panelWidth]);
+
+  // Ширина хранится в пикселях, но окно могло стать уже — не даём панели
+  // занять больше половины экрана.
+  const panelWidthPx = Math.max(
+    PANEL_MIN_WIDTH,
+    Math.min(panelWidth, Math.round(window.innerWidth * 0.5)),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1248,6 +1548,20 @@ const DoctorDatabase = () => {
 
   const selectedVisit =
     records.visits.find((visit) => visit.id === selectedVisitId) ?? patientVisits[0];
+
+  /**
+   * Выделенная строка графика. По умолчанию — самый свежий СВОЙ приём, отличный
+   * от открытого: сценарий «пациент пришёл снова» начинается именно с него, и
+   * «Копировать протокол» работает с первого клика.
+   *
+   * Именно свой: если последним в списке окажется приём другого врача, кнопка
+   * копирования окажется заблокированной на пустом месте — врач увидит серую
+   * кнопку и не поймёт почему.
+   */
+  const scheduleSelectedId = patientVisits.some((visit) => visit.id === scheduleSelectionId)
+    ? scheduleSelectionId
+    : patientVisits.find((visit) => visit.id !== selectedVisitId && visit.doctorId === doctor?.id)
+        ?.id ?? "";
 
   const selectedPrintTemplate =
     printTemplates.find((template) => template.id === selectedPrintTemplateId) ??
@@ -1563,6 +1877,7 @@ const DoctorDatabase = () => {
     const visit = {
       ...emptyVisit(doctor, selectedPatient.id),
       recordDate: today,
+      recordTime: currentTime(),
       consultationType: getNextConsultationType(selectedPatient.id, currentRecords),
       ageAtVisit: getAgeAtDate(selectedPatient.birthDate, today),
     };
@@ -1579,12 +1894,50 @@ const DoctorDatabase = () => {
       ...currentVisit,
       id: crypto.randomUUID(),
       recordDate: new Date().toISOString().slice(0, 10),
+      recordTime: currentTime(),
       consultationType: getNextConsultationType(currentVisit.patientId, currentRecords),
       nextVisitDate: "",
       doctorComment: "",
     };
     updateDraftRecords({ ...currentRecords, visits: [...currentRecords.visits, visit] });
     setSelectedVisitId(visit.id);
+  };
+
+  /**
+   * Копирование протокола из графика. По требованию доктора это НИКОГДА не
+   * запись поверх: создаётся новый приём с полями выбранного, и уже он
+   * дополняется после осмотра. Поэтому подтверждение не спрашиваем — затирать
+   * нечего, а старый приём остаётся в истории нетронутым.
+   */
+  const copyProtocolFromVisit = (visitId: string) => {
+    if (!doctor) return;
+    const currentRecords = recordsRef.current;
+    const source = currentRecords.visits.find((visit) => visit.id === visitId);
+    if (!source) return;
+    if (source.doctorId !== doctor.id) {
+      toast({
+        title: "Приём другого врача",
+        description: "Скопировать протокол может только врач, который его вёл.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const visit = {
+      ...source,
+      id: crypto.randomUUID(),
+      recordDate: new Date().toISOString().slice(0, 10),
+      recordTime: currentTime(),
+      consultationType: getNextConsultationType(source.patientId, currentRecords),
+      nextVisitDate: "",
+      doctorComment: "",
+    };
+    updateDraftRecords({ ...currentRecords, visits: [...currentRecords.visits, visit] });
+    setSelectedVisitId(visit.id);
+    toast({
+      title: "Протокол скопирован",
+      description: "Создан новый приём. Дополните его после осмотра.",
+    });
   };
 
   const saveRecords = async () => {
@@ -1872,7 +2225,10 @@ const DoctorDatabase = () => {
             Колонки пациентов здесь больше нет: выбор пациента переехал
             в выпадающий список верхней панели. Освободившиеся 248 px отданы
             полям истории болезни — ради них экран и открывают. */}
-        <div className="grid gap-1.5 xl:grid-cols-[minmax(0,1fr)_300px]">
+        <div
+          className="grid gap-1.5 xl:grid-cols-[minmax(0,1fr)_6px_var(--panel-w)]"
+          style={{ "--panel-w": `${panelWidthPx}px` } as CSSProperties}
+        >
 
           <section
             data-testid="record-form"
@@ -1892,7 +2248,9 @@ const DoctorDatabase = () => {
                           {selectedPatient.middleName}
                         </h2>
                         <p className="text-[10px] leading-tight text-muted-foreground">
-                          {selectedVisit.recordDate} · {selectedVisit.consultationType}
+                          {formatDateRu(selectedVisit.recordDate)}
+                          {selectedVisit.recordTime ? ` · ${selectedVisit.recordTime}` : ""} ·{" "}
+                          {selectedVisit.consultationType}
                         </p>
                       </div>
                     </div>
@@ -1905,7 +2263,8 @@ const DoctorDatabase = () => {
                       >
                         {patientVisits.map((visit) => (
                           <option key={visit.id} value={visit.id}>
-                            {visit.recordDate} · {visit.consultationType}
+                            {formatDateRu(visit.recordDate)}
+                            {visit.recordTime ? ` ${visit.recordTime}` : ""} · {visit.consultationType}
                           </option>
                         ))}
                       </select>
@@ -1943,6 +2302,7 @@ const DoctorDatabase = () => {
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Дата рождения" type="date" value={selectedPatient.birthDate} onChange={(value) => updatePatient("birthDate", value)} />
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Телефон" value={selectedPatient.phone} onChange={(value) => updatePatient("phone", value)} />
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Дата записи" type="date" value={selectedVisit.recordDate} onChange={(value) => updateVisit("recordDate", value)} />
+                    <Field onActivateSuggestions={activateSuggestionTarget} label="Время приёма" type="time" value={selectedVisit.recordTime} onChange={(value) => updateVisit("recordTime", value)} />
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Полных лет" value={selectedVisit.ageAtVisit || getAgeAtDate(selectedPatient.birthDate, selectedVisit.recordDate)} onChange={(value) => updateVisit("ageAtVisit", value)} />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Адрес" value={selectedPatient.address} onChange={(value) => updatePatient("address", value)} />
                   </RecordSection>
@@ -2044,19 +2404,34 @@ const DoctorDatabase = () => {
             )}
           </section>
 
-          {/* Панель рендерится всегда: при пустом выборе она показывает
-              подсказку «щёлкните по полю». Условный рендер заставлял сетку
-              менять число колонок на каждом фокусе — форма дёргалась. */}
-          <SuggestionPanel
-            label={activeSuggestionTarget?.label ?? ""}
-            suggestions={activeSuggestions}
-            phrase={suggestionPhrase}
-            onPhraseChange={setSuggestionPhrase}
-            onAdd={addActiveSuggestion}
-            onDelete={deleteActiveSuggestion}
-            onPick={(value) => activeSuggestionTarget?.insert(value)}
-            onClose={() => setActiveSuggestionTarget(null)}
-          />
+          <PanelResizer width={panelWidthPx} onChange={setPanelWidth} />
+
+          {/* Панель рендерится всегда, но в одном из двух режимов: справочники
+              или график. Переключает врач кнопкой «Информация», а не фокус:
+              иначе форма дёргалась бы на каждом клике в поле. */}
+          {panelMode === "schedule" ? (
+            <SchedulePanel
+              visits={patientVisits}
+              doctorId={doctor?.id ?? ""}
+              selectedVisitId={scheduleSelectedId}
+              onSelect={setScheduleSelectionId}
+              onOpen={(visitId) => setSelectedVisitId(visitId)}
+              onCopyProtocol={copyProtocolFromVisit}
+              onToggleMode={() => setPanelMode("dictionary")}
+            />
+          ) : (
+            <SuggestionPanel
+              label={activeSuggestionTarget?.label ?? ""}
+              suggestions={activeSuggestions}
+              phrase={suggestionPhrase}
+              onPhraseChange={setSuggestionPhrase}
+              onAdd={addActiveSuggestion}
+              onDelete={deleteActiveSuggestion}
+              onPick={(value) => activeSuggestionTarget?.insert(value)}
+              onClose={() => setActiveSuggestionTarget(null)}
+              onToggleMode={() => setPanelMode("schedule")}
+            />
+          )}
         </div>
       </main>
       <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>

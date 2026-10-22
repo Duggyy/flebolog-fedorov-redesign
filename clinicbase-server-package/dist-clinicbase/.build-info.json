@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "0624b1cd8ff906fd57728473f128b2ccb454538b",
-  "shortSha": "0624b1c",
-  "subject": "ClinicBase: сообщение для пациента без приёмов — без склонения фамилии",
-  "builtAt": "2026-10-21T23:09:25.104Z",
-  "dirty": false
+  "sha": "224fde11a44b5648aec0e6f9ce5cd0e754a511c5",
+  "shortSha": "224fde1",
+  "subject": "Пакет ClinicBase: перештампован под 0624b1c",
+  "builtAt": "2026-10-22T09:05:24.495Z",
+  "dirty": true
 }
