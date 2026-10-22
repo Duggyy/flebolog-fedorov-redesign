@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "81bbf59aac5eae3eb36ef375a946919fb2f65faa",
-  "shortSha": "81bbf59",
-  "subject": "ClinicBase: справочники с кратким именем, полным текстом, цветом и печатью",
-  "builtAt": "2026-10-22T20:22:15.807Z",
-  "dirty": false
+  "sha": "4c1655795376198fd70f27bc802caf31ac2dd6d9",
+  "shortSha": "4c16557",
+  "subject": "Справочники: при открытии показывать область, где записи действительно есть",
+  "builtAt": "2026-10-22T20:27:35.243Z",
+  "dirty": true
 }
