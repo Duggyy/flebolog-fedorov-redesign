@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "15abf1110b662a18a821d79f97875e0779110c79",
-  "shortSha": "15abf11",
-  "subject": "Кэш отзывов ПроДокторов: обновлена метка времени (содержимое не менялось)",
-  "builtAt": "2026-10-22T20:09:46.591Z",
-  "dirty": true
+  "sha": "81bbf59aac5eae3eb36ef375a946919fb2f65faa",
+  "shortSha": "81bbf59",
+  "subject": "ClinicBase: справочники с кратким именем, полным текстом, цветом и печатью",
+  "builtAt": "2026-10-22T20:22:15.807Z",
+  "dirty": false
 }
