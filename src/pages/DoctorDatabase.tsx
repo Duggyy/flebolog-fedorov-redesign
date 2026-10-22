@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
+  BookOpen,
   CalendarDays,
   Check,
   ChevronDown,
@@ -35,13 +36,15 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { loadAuthSession, saveAuthSession } from "@/lib/auth-session";
 import {
+  apiDeleteDictionaryEntry,
+  apiGetDictionaries,
   apiGetDoctors,
   apiGetRecords,
   apiGetSession,
-  apiGetSuggestions,
+  apiImportDictionaryEntries,
   apiLogin,
+  apiSaveDictionaryEntry,
   apiSaveRecords,
-  apiSaveSuggestions,
   isApiUnavailable,
 } from "@/lib/clinicbase-api";
 import { DoctorUser, initialDoctors, loadDoctorUsers } from "@/lib/doctor-users";
@@ -536,6 +539,7 @@ const getNearestNextVisitDate = (visits: Visit[], patientId: string) => {
 };
 
 const suggestionsStorageKey = "fedorov-field-suggestions-v1";
+const dictionariesStorageKey = "clinicbase-dictionaries-v1";
 
 const defaultSuggestions: Record<string, string[]> = {
   Жалобы: [
@@ -584,48 +588,257 @@ const defaultSuggestions: Record<string, string[]> = {
   "Комментарии доктора": ["Не выводить на печать", "Обсужден план лечения"],
 };
 
-const loadSuggestions = (label: string) => {
-  const saved = localStorage.getItem(suggestionsStorageKey);
-  const fallback = defaultSuggestions[label] ?? [];
-  if (!saved) return fallback;
+/** «Общие» видит каждый врач, «Мои» — только автор. */
+type DictionaryScope = "global" | "personal";
 
-  try {
-    const parsed = JSON.parse(saved) as Record<string, string[]>;
-    return parsed[label] ?? fallback;
-  } catch {
-    return fallback;
-  }
+/**
+ * Запись справочника.
+ *
+ * Раньше подсказки были просто массивом строк на поле. Из такого массива
+ * нельзя получить ни краткое имя отдельно от полного текста, ни цвет шрифта,
+ * ни подпункт, ни порядок, заданный врачом, — поэтому запись стала объектом,
+ * а массив остался только представлением для панели.
+ */
+type DictionaryEntry = {
+  id: string;
+  /** Имя поля, к которому привязан раздел: «Жалобы», «Аллергии» и т. д. */
+  section: string;
+  /** Краткое имя — то, что вставляется в текст протокола. */
+  short: string;
+  /** Полный текст — раскрывается в подсказке и идёт в печатную форму. */
+  full: string;
+  /** Цвет шрифта в подсказке, `#rrggbb`. Пустая строка — цвет по умолчанию. */
+  color: string;
+  /** Родительская запись: подпункт дописывает текст к вставленному. */
+  parentId: string;
+  order: number;
+  scope: DictionaryScope;
 };
 
-const loadAllSuggestions = () => {
-  const saved = localStorage.getItem(suggestionsStorageKey);
-  if (!saved) return defaultSuggestions;
+/** Палитра для редактора: цвета подобраны так, чтобы читаться на светлом фоне. */
+const dictionaryColors = [
+  { value: "", label: "По умолчанию" },
+  { value: "#b91c1c", label: "Красный" },
+  { value: "#c2410c", label: "Оранжевый" },
+  { value: "#a16207", label: "Жёлто-коричневый" },
+  { value: "#15803d", label: "Зелёный" },
+  { value: "#0f766e", label: "Бирюзовый" },
+  { value: "#1d4ed8", label: "Синий" },
+  { value: "#6d28d9", label: "Фиолетовый" },
+  { value: "#be185d", label: "Розовый" },
+  { value: "#334155", label: "Тёмно-серый" },
+];
 
-  try {
-    const parsed = JSON.parse(saved) as Record<string, string[]>;
-    return { ...defaultSuggestions, ...parsed };
-  } catch {
-    return defaultSuggestions;
+/**
+ * Устойчивый идентификатор из текста.
+ *
+ * Нужен для записей, которые создаются из справочника по умолчанию: при
+ * каждом запуске они должны получать те же id, иначе первое же сохранение
+ * в базу превратилось бы в поток дублей. Порядок ключей в объекте для этого
+ * не годится — он может измениться при правке файла.
+ */
+const stableId = (prefix: string, ...parts: string[]) => {
+  let hash = 5381;
+  const source = parts.join("\u0000");
+  for (let index = 0; index < source.length; index += 1) {
+    hash = ((hash << 5) + hash + source.charCodeAt(index)) | 0;
   }
+  return `${prefix}-${(hash >>> 0).toString(36)}`;
 };
 
-const saveSuggestions = (label: string, suggestions: string[]) => {
+const isDictionaryEntry = (value: unknown): value is DictionaryEntry => {
+  if (!value || typeof value !== "object") return false;
+  const entry = value as Partial<DictionaryEntry>;
+  return (
+    typeof entry.id === "string" &&
+    typeof entry.section === "string" &&
+    typeof entry.short === "string" &&
+    (entry.scope === "global" || entry.scope === "personal")
+  );
+};
+
+/** Приведение к полному виду: у записей из старых версий части полей нет. */
+const normalizeEntry = (entry: DictionaryEntry): DictionaryEntry => ({
+  id: entry.id,
+  section: entry.section,
+  short: entry.short,
+  full: typeof entry.full === "string" ? entry.full : "",
+  color: /^#[0-9a-fA-F]{6}$/.test(entry.color ?? "") ? entry.color : "",
+  parentId: typeof entry.parentId === "string" ? entry.parentId : "",
+  order: Number.isFinite(entry.order) ? entry.order : 0,
+  scope: entry.scope,
+});
+
+const sortEntries = (entries: DictionaryEntry[]) =>
+  [...entries].sort(
+    (a, b) =>
+      a.section.localeCompare(b.section, "ru") ||
+      a.order - b.order ||
+      a.short.localeCompare(b.short, "ru"),
+  );
+
+/**
+ * Первичное наполнение справочника и перенос старых подсказок.
+ *
+ * Старое хранение заменяло раздел целиком: `{...defaultSuggestions, ...parsed}`.
+ * Поэтому если раздел есть в старом ключе, там лежит ПОЛНЫЙ набор — и общие
+ * записи для него создавать нельзя, иначе каждая строка задвоится.
+ */
+const buildInitialDictionaries = (): DictionaryEntry[] => {
+  const entries: DictionaryEntry[] = [];
+  let legacy: Record<string, string[]> | null = null;
+
   const saved = localStorage.getItem(suggestionsStorageKey);
-  let parsed: Record<string, string[]> = {};
   if (saved) {
     try {
-      parsed = JSON.parse(saved) as Record<string, string[]>;
+      const parsed = JSON.parse(saved) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        legacy = parsed as Record<string, string[]>;
+      }
     } catch {
-      parsed = {};
+      legacy = null;
     }
   }
-  localStorage.setItem(suggestionsStorageKey, JSON.stringify({ ...parsed, [label]: suggestions }));
+
+  Object.entries(defaultSuggestions).forEach(([section, items]) => {
+    if (legacy && Object.prototype.hasOwnProperty.call(legacy, section)) return;
+    items.forEach((text, index) => {
+      entries.push({
+        id: stableId("global", section, text),
+        section,
+        short: text,
+        full: "",
+        color: "",
+        parentId: "",
+        order: index,
+        scope: "global",
+      });
+    });
+  });
+
+  Object.entries(legacy ?? {}).forEach(([section, items]) => {
+    if (!Array.isArray(items)) return;
+    items
+      .filter((text): text is string => typeof text === "string" && text.trim() !== "")
+      .forEach((text, index) => {
+        entries.push({
+          id: stableId("personal", section, text),
+          section,
+          short: text,
+          full: "",
+          color: "",
+          parentId: "",
+          order: index,
+          scope: "personal",
+        });
+      });
+  });
+
+  return sortEntries(entries);
 };
 
-const persistSuggestions = (label: string, suggestions: string[]) => {
-  saveSuggestions(label, suggestions);
-  apiSaveSuggestions(label, suggestions).catch(() => undefined);
+const loadDictionaries = (): DictionaryEntry[] => {
+  const saved = localStorage.getItem(dictionariesStorageKey);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved) as unknown;
+      if (Array.isArray(parsed)) {
+        return sortEntries(parsed.filter(isDictionaryEntry).map(normalizeEntry));
+      }
+    } catch {
+      // Испорченное значение — не повод остаться без справочников: ниже
+      // соберём их заново из умолчаний и старого ключа.
+    }
+  }
+
+  const initial = buildInitialDictionaries();
+  localStorage.setItem(dictionariesStorageKey, JSON.stringify(initial));
+  return initial;
 };
+
+const saveDictionaries = (entries: DictionaryEntry[]) => {
+  localStorage.setItem(dictionariesStorageKey, JSON.stringify(entries));
+};
+
+/**
+ * Тексты для панели подсказок: сначала свои записи, затем общие, без повторов.
+ *
+ * Именно объединение, а не «личное заменяет общее»: в старом хранении личная
+ * запись с тем же именем поля молча вытесняла общую целиком, и врач терял
+ * записи, которых сам не удалял.
+ */
+const suggestionTextsFor = (entries: DictionaryEntry[], section: string) => {
+  const own = entries.filter((entry) => entry.section === section && entry.scope === "personal");
+  const common = entries.filter((entry) => entry.section === section && entry.scope === "global");
+  const seen = new Set<string>();
+
+  return [...own.sort((a, b) => a.order - b.order), ...common.sort((a, b) => a.order - b.order)]
+    .map((entry) => entry.short)
+    .filter((text) => {
+      if (seen.has(text)) return false;
+      seen.add(text);
+      return true;
+    });
+};
+
+/**
+ * Разделы справочника — подписи полей формы.
+ *
+ * Отдельный список, а не `printFields`: у печатных полей свои названия
+ * («Пациент: ФИО»), и раздел справочника с ними никогда бы не совпал с полем,
+ * у которого врач вызвал подсказку. Порядок совпадает с порядком полей
+ * в форме, чтобы раздел искался там же, где видели поле.
+ *
+ * Дубликаты возможны по смыслу («Врач» есть и в осмотре, и в УЗИ) — это одно
+ * и то же поле по названию, поэтому Set оставляет один раздел.
+ */
+const dictionarySections = Array.from(
+  new Set([
+    "Фамилия",
+    "Имя",
+    "Отчество",
+    "Дата рождения",
+    "Телефон",
+    "Дата записи",
+    "Время приёма",
+    "Полных лет",
+    "Адрес",
+    "Врач",
+    "Консультация врача",
+    "Жалобы",
+    "Анамнез заболевания",
+    "Наследственность по основному заболеванию",
+    "Перенесенные заболевания",
+    "Перенесенные операции",
+    "Аллергии",
+    "Общий осмотр",
+    "Локальный осмотр",
+    "Аппарат",
+    "Глубокие вены правая нижняя конечность",
+    "Глубокие вены левая нижняя конечность",
+    "Правая нижняя конечность: бассейн БПВ",
+    "Правая нижняя конечность: бассейн МПВ",
+    "Левая нижняя конечность: бассейн БПВ",
+    "Левая нижняя конечность: бассейн МПВ",
+    "Несостоятельные перфоранты",
+    "Отек/лимфостаз",
+    "Заключение",
+    "Основное заболевание",
+    "Код МКБ",
+    "Сопутствующие заболевания",
+    "Режим",
+    "Медикаментозная терапия",
+    "Немедикаментозная терапия, рекомендованные манипуляции",
+    "Консультации специалистов",
+    "План обследования",
+    "Рекомендации",
+    "Дата следующего визита",
+    "Комментарии доктора",
+    "Название и локализация",
+    "Выполнено",
+    "Результат",
+  ]),
+);
 
 type SuggestionTarget = {
   label: string;
@@ -917,7 +1130,7 @@ const SchedulePanel = ({
 
 const SuggestionPanel = ({
   label,
-  suggestions,
+  entries,
   phrase,
   onPhraseChange,
   onAdd,
@@ -925,9 +1138,10 @@ const SuggestionPanel = ({
   onPick,
   onClose,
   onToggleMode,
+  onOpenDictionaries,
 }: {
   label: string;
-  suggestions: string[];
+  entries: DictionaryEntry[];
   phrase: string;
   onPhraseChange: (value: string) => void;
   onAdd: () => void;
@@ -935,10 +1149,18 @@ const SuggestionPanel = ({
   onPick: (value: string) => void;
   onClose: () => void;
   onToggleMode: () => void;
+  onOpenDictionaries: () => void;
 }) => {
   const [filter, setFilter] = useState("");
   const query = filter.trim().toLowerCase();
-  const visible = query ? suggestions.filter((item) => item.toLowerCase().includes(query)) : suggestions;
+  // Ищем и по краткому имени, и по полному тексту: врач помнит формулировку,
+  // а не то, как он её сократил.
+  const visible = query
+    ? entries.filter(
+        (entry) =>
+          entry.short.toLowerCase().includes(query) || entry.full.toLowerCase().includes(query),
+      )
+    : entries;
 
   return (
     <aside
@@ -961,7 +1183,7 @@ const SuggestionPanel = ({
           >
             {label}
           </p>
-          <div className="border-b border-[#d7dce4] p-1">
+          <div className="flex items-center gap-1 border-b border-[#d7dce4] p-1">
             <Input
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
@@ -969,34 +1191,58 @@ const SuggestionPanel = ({
               aria-label="Фильтр справочника"
               className="h-6 rounded-sm border-[#c6ced9] px-1.5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
             />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onOpenDictionaries}
+              className="h-6 shrink-0 px-1.5 text-[11px]"
+              data-testid="open-dictionaries"
+              title="Открыть справочники: правка, цвет, печать"
+            >
+              <Settings className="h-3 w-3" />
+            </Button>
           </div>
           {/* Строки вплотную, без рамок и отступов между ними: в прототипе
               справочник — это плотный текстовый столбец, а не карточки.
               На экране 900 px так помещается около 40 записей вместо 12. */}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {visible.length > 0 ? (
-              visible.map((suggestion) => (
+              visible.map((entry) => (
                 <div
-                  key={suggestion}
+                  key={entry.id}
+                  data-testid="dictionary-row"
+                  data-scope={entry.scope}
                   className="group flex items-start border-b border-[#e1e5eb] last:border-b-0 hover:bg-[#e3e9f2]"
                 >
                   <button
                     type="button"
-                    className="min-w-0 flex-1 px-1.5 py-[2px] text-left text-[11px] leading-[1.25] text-foreground"
+                    className="min-w-0 flex-1 px-1.5 py-[2px] text-left text-[11px] leading-[1.25]"
+                    // Цвет приходит из справочника: врач помечает им записи,
+                    // которые нельзя перепутать (например, «не выводить
+                    // на печать»).
+                    style={entry.color ? { color: entry.color } : undefined}
+                    title={entry.full || entry.short}
                     onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onPick(suggestion)}
+                    onClick={() => onPick(entry.short)}
                   >
-                    {suggestion}
+                    {entry.short}
                   </button>
-                  <button
-                    type="button"
-                    className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onDelete(suggestion)}
-                    aria-label={`Удалить запись: ${suggestion}`}
-                  >
-                    ×
-                  </button>
+                  {entry.scope === "personal" ? (
+                    <button
+                      type="button"
+                      className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => onDelete(entry.short)}
+                      aria-label={`Удалить запись: ${entry.short}`}
+                    >
+                      ×
+                    </button>
+                  ) : (
+                    // Общая запись принадлежит всем врачам — из узкой панели
+                    // её не удаляют, для этого есть экран «Справочники».
+                    <span className="w-4 shrink-0" aria-hidden="true" />
+                  )}
                 </div>
               ))
             ) : (
@@ -1387,6 +1633,543 @@ const PatientPicker = ({
   );
 };
 
+/**
+ * Печать справочника.
+ *
+ * Отдельным окном, а не `window.print()` на месте: печатается документ, а не
+ * диалог. Radix рисует содержимое в портале, и при печати браузеры ведут себя
+ * по-разному — от «напечатался пустой лист» до «напечатался весь интерфейс».
+ */
+const printDictionaries = (entries: DictionaryEntry[], scope: DictionaryScope, scopeTitle: string) => {
+  const bySection = new Map<string, DictionaryEntry[]>();
+  entries
+    .filter((entry) => entry.scope === scope)
+    .forEach((entry) => {
+      const bucket = bySection.get(entry.section) ?? [];
+      bucket.push(entry);
+      bySection.set(entry.section, bucket);
+    });
+
+  const sectionsHtml = Array.from(bySection.entries())
+    .map(([section, items]) => {
+      const rows = [...items]
+        .sort((a, b) => a.order - b.order || a.short.localeCompare(b.short, "ru"))
+        .map((entry) => {
+          const color = entry.color ? ` style="color:${entry.color}"` : "";
+          // Полный текст печатаем, только если он отличается от краткого:
+          // иначе каждая строка задвоится.
+          const full =
+            entry.full && entry.full !== entry.short
+              ? `<div class="full">${escapeHtml(entry.full).replace(/\n/g, "<br>")}</div>`
+              : "";
+          return `<tr><td${color}>${escapeHtml(entry.short)}${full}</td></tr>`;
+        })
+        .join("");
+      return `<h2>${escapeHtml(section)}</h2><table>${rows}</table>`;
+    })
+    .join("");
+
+  const html = `<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Справочники — ${escapeHtml(scopeTitle)}</title>
+  <style>
+    body { font-family: "Times New Roman", serif; font-size: 12pt; line-height: 1.3; margin: 18mm; }
+    h1 { font-size: 16pt; margin: 0 0 4mm; }
+    h2 { font-size: 13pt; margin: 6mm 0 2mm; border-bottom: 1px solid #999; }
+    table { width: 100%; border-collapse: collapse; }
+    td { padding: 1mm 0; vertical-align: top; }
+    .full { font-size: 10pt; color: #444; }
+    @media print { h2 { break-after: avoid; } }
+  </style>
+</head>
+<body>
+  <h1>Справочники — ${escapeHtml(scopeTitle)}</h1>
+  ${sectionsHtml || "<p>Записей нет.</p>"}
+</body>
+</html>`;
+
+  const printWindow = window.open("", "_blank", "width=900,height=760");
+  if (!printWindow) return false;
+
+  printWindow.document.write(html);
+  printWindow.document.close();
+  // Небольшая задержка: сразу после write документ ещё не разобран,
+  // и print() в Safari печатает пустую страницу.
+  window.setTimeout(() => {
+    printWindow.focus();
+    printWindow.print();
+  }, 150);
+  return true;
+};
+
+/**
+ * Экран справочников: список разделов, записи и редактор.
+ *
+ * Отдельный экран, а не расширение узкой панели, потому что здесь у записи
+ * четыре свойства (краткое имя, полный текст, цвет, подпункт) — в 300 px
+ * панели они не помещаются, а простыня из полей в панели мешала бы работать
+ * с протоколом.
+ */
+const DictionariesDialog = ({
+  open,
+  onOpenChange,
+  entries,
+  initialSection,
+  onSave,
+  onDelete,
+  onImport,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  entries: DictionaryEntry[];
+  initialSection: string;
+  onSave: (entry: DictionaryEntry) => void;
+  onDelete: (entry: DictionaryEntry) => void;
+  onImport: (section: string, items: Array<{ short: string; full: string }>) => Promise<number>;
+}) => {
+  const [scope, setScope] = useState<DictionaryScope>("personal");
+  const [section, setSection] = useState(initialSection);
+  const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState<DictionaryEntry | null>(null);
+  const [importText, setImportText] = useState("");
+  const [importMode, setImportMode] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setSection(initialSection);
+    setSearch("");
+    setDraft(null);
+    setImportMode(false);
+    setImportText("");
+  }, [open, initialSection]);
+
+  // Разделы — поля формы плюс всё, что уже встречается в записях. Второе
+  // важно: справочник мог наполниться для поля, которого в форме нет.
+  const sections = useMemo(() => {
+    const known = new Set(dictionarySections);
+    entries.forEach((entry) => known.add(entry.section));
+    return Array.from(known);
+  }, [entries]);
+
+  const countInSection = (name: string, target: DictionaryScope) =>
+    entries.filter((entry) => entry.section === name && entry.scope === target).length;
+
+  const sectionEntries = entries.filter(
+    (entry) => entry.section === section && entry.scope === scope,
+  );
+  const query = search.trim().toLowerCase();
+  const visible = query
+    ? sectionEntries.filter(
+        (entry) =>
+          entry.short.toLowerCase().includes(query) || entry.full.toLowerCase().includes(query),
+      )
+    : sectionEntries;
+
+  const startNew = () => {
+    setImportMode(false);
+    setDraft({
+      id: crypto.randomUUID(),
+      section,
+      short: "",
+      full: "",
+      color: "",
+      parentId: "",
+      order: entries
+        .filter((entry) => entry.section === section)
+        .reduce((max, entry) => Math.max(max, entry.order + 1), 0),
+      scope,
+    });
+  };
+
+  const commitDraft = () => {
+    if (!draft) return;
+    const short = draft.short.trim();
+    if (!short) return;
+    onSave({ ...draft, short, full: draft.full.trim() });
+    setDraft(null);
+  };
+
+  const startImport = async () => {
+    setDraft(null);
+    setImportMode(true);
+    // Пробуем прочитать буфер сразу: если браузер разрешает — врач увидит
+    // готовый текст и просто нажмёт «Вставить». Если нет, поле останется
+    // пустым и он вставит вручную.
+    try {
+      const clipboard = await navigator.clipboard.readText();
+      if (clipboard.trim()) setImportText(clipboard);
+    } catch {
+      // Разрешения нет — это нормально, ничего не делаем.
+    }
+  };
+
+  const runImport = async () => {
+    const items = importText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        // Строка «краткое | полное»: разделитель — вертикальная черта или
+        // табуляция. Всё, что до него, вставляется в текст, всё после —
+        // раскрывается в подсказке.
+        const [shortPart, ...rest] = line.split(/\s*[|\t]\s*/);
+        return { short: shortPart.trim(), full: rest.join(" | ").trim() };
+      })
+      .filter((item) => item.short);
+
+    if (items.length === 0) return;
+    await onImport(section, items);
+    setImportMode(false);
+    setImportText("");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="max-w-[1120px] gap-3 p-4"
+        data-testid="dictionaries-dialog"
+      >
+        <DialogHeader className="space-y-1">
+          <DialogTitle className="text-base">Справочники</DialogTitle>
+          <DialogDescription className="text-[11px]">
+            Краткое имя вставляется в протокол, полный текст раскрывается в подсказке и идёт
+            на печать. Цвет помогает не перепутать записи.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex rounded-sm border border-[#c6ced9] p-0.5" role="tablist">
+            {([
+              ["personal", "Мои"],
+              ["global", "Общие"],
+            ] as Array<[DictionaryScope, string]>).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={scope === value}
+                data-testid={`dictionaries-tab-${value}`}
+                onClick={() => {
+                  setScope(value);
+                  setDraft(null);
+                  setImportMode(false);
+                  // Если в открытом разделе записей этой области нет, оставлять
+                  // его бессмысленно: врач увидит пустой список и решит, что
+                  // справочник пуст. Переходим к первому разделу, где записи
+                  // есть, — но только когда текущий пуст.
+                  const hasInSection = entries.some(
+                    (entry) => entry.section === section && entry.scope === value,
+                  );
+                  if (!hasInSection) {
+                    const firstFilled = sections.find((name) =>
+                      entries.some((entry) => entry.section === name && entry.scope === value),
+                    );
+                    if (firstFilled) setSection(firstFilled);
+                  }
+                }}
+                className={`h-6 px-2.5 text-[11px] ${
+                  scope === value
+                    ? "rounded-sm bg-secondary/10 font-semibold text-secondary"
+                    : "text-[#5a6675] hover:bg-[#eef1f5]"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-[10px] leading-tight text-muted-foreground">
+            {scope === "global"
+              ? "Изменения в общем справочнике видны всем врачам."
+              : "Личный справочник видите только вы."}
+          </p>
+          <div className="ml-auto flex flex-wrap gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              data-testid="dictionary-import"
+              onClick={startImport}
+            >
+              <Download className="mr-1 h-3 w-3" />
+              Вставить из буфера
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              data-testid="dictionary-print"
+              onClick={() => {
+                const printed = printDictionaries(
+                  entries,
+                  scope,
+                  scope === "global" ? "общие" : "мои",
+                );
+                if (!printed) {
+                  window.alert("Браузер заблокировал окно печати. Разрешите всплывающие окна.");
+                }
+              }}
+            >
+              <Printer className="mr-1 h-3 w-3" />
+              Печать
+            </Button>
+            <Button
+              size="sm"
+              className="h-6 px-2 text-[11px]"
+              data-testid="dictionary-add"
+              onClick={startNew}
+            >
+              <Plus className="mr-1 h-3 w-3" />
+              Запись
+            </Button>
+          </div>
+        </div>
+
+        <div className="grid min-h-0 gap-2 lg:grid-cols-[220px_minmax(0,1fr)_320px]">
+          {/* Разделы */}
+          <aside className="max-h-[58vh] overflow-y-auto rounded-sm border border-[#c6ced9] bg-[#f4f6f9]">
+            {sections.map((name) => {
+              const count = countInSection(name, scope);
+              const active = name === section;
+              return (
+                <button
+                  key={name}
+                  type="button"
+                  data-testid="dictionary-section"
+                  data-active={active}
+                  onClick={() => {
+                    setSection(name);
+                    setDraft(null);
+                    setImportMode(false);
+                  }}
+                  className={`flex w-full items-baseline gap-1 border-b border-[#e1e5eb] px-1.5 py-[3px] text-left text-[11px] leading-[1.25] last:border-b-0 ${
+                    active ? "bg-secondary/10 font-semibold text-secondary" : "hover:bg-[#e3e9f2]"
+                  }`}
+                >
+                  <span className="min-w-0 flex-1 truncate" title={name}>
+                    {name}
+                  </span>
+                  <span className={`shrink-0 text-[10px] ${count === 0 ? "text-[#b6bec9]" : "text-[#5a6675]"}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </aside>
+
+          {/* Записи выбранного раздела */}
+          <section className="flex max-h-[58vh] min-w-0 flex-col rounded-sm border border-[#c6ced9] bg-white">
+            <div className="border-b border-[#d7dce4] bg-[#eef1f5] px-1.5 py-1">
+              <p className="truncate text-[11px] font-medium" title={section}>
+                {section || "Выберите раздел"}
+              </p>
+            </div>
+            <div className="border-b border-[#d7dce4] p-1">
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Поиск по краткому и полному тексту"
+                aria-label="Поиск по справочнику"
+                className="h-6 rounded-sm border-[#c6ced9] px-1.5 text-[11px] shadow-none focus-visible:ring-1 focus-visible:ring-primary/50 focus-visible:ring-offset-0"
+              />
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {visible.length > 0 ? (
+                visible.map((entry) => (
+                  <div
+                    key={entry.id}
+                    data-testid="dictionary-entry"
+                    className={`group flex items-start gap-1 border-b border-[#e1e5eb] last:border-b-0 ${
+                      draft?.id === entry.id ? "bg-secondary/10" : "hover:bg-[#e3e9f2]"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 px-1.5 py-[3px] text-left text-[11px] leading-[1.25]"
+                      onClick={() => {
+                        setImportMode(false);
+                        setDraft({ ...entry });
+                      }}
+                    >
+                      <span
+                        className="block truncate"
+                        style={entry.color ? { color: entry.color } : undefined}
+                        title={entry.full || entry.short}
+                      >
+                        {entry.short}
+                      </span>
+                      {entry.full && entry.full !== entry.short ? (
+                        <span className="block truncate text-[10px] text-[#7a8697]">{entry.full}</span>
+                      ) : null}
+                    </button>
+                    <button
+                      type="button"
+                      className="w-5 shrink-0 py-[3px] text-center text-[12px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                      aria-label={`Удалить запись: ${entry.short}`}
+                      onClick={() => onDelete(entry)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="px-1.5 py-2 text-[11px] text-muted-foreground">
+                  {query ? "Ничего не найдено." : "Записей нет. Добавьте первую."}
+                </p>
+              )}
+            </div>
+          </section>
+
+          {/* Редактор */}
+          <section className="flex max-h-[58vh] min-w-0 flex-col overflow-y-auto rounded-sm border border-[#c6ced9] bg-[#f7f8fa] p-2">
+            {importMode ? (
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium">Вставить из буфера</p>
+                <p className="text-[10px] leading-snug text-muted-foreground">
+                  Одна строка — одна запись. Нужны и краткое имя, и полный текст — разделите их
+                  вертикальной чертой: <span className="whitespace-nowrap">Отечность | Отёки голеней к вечеру</span>.
+                </p>
+                <Textarea
+                  value={importText}
+                  onChange={(event) => setImportText(event.target.value)}
+                  placeholder={"Тяжесть в ногах к вечеру\nОтечность голеней | Отёки голеней и стоп к вечеру"}
+                  aria-label="Строки для вставки"
+                  data-testid="dictionary-import-text"
+                  className="min-h-[180px] bg-white text-[11px]"
+                />
+                <div className="flex gap-1.5">
+                  <Button size="sm" className="h-6 px-2 text-[11px]" onClick={runImport}>
+                    <Check className="mr-1 h-3 w-3" />
+                    Вставить
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px]"
+                    onClick={() => {
+                      setImportMode(false);
+                      setImportText("");
+                    }}
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Отмена
+                  </Button>
+                </div>
+              </div>
+            ) : draft ? (
+              <div className="space-y-2">
+                <p className="text-[11px] font-medium">
+                  {entries.some((entry) => entry.id === draft.id) ? "Изменить запись" : "Новая запись"}
+                </p>
+                <div className="space-y-1">
+                  <Label htmlFor="dictionary-short" className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Краткое имя
+                  </Label>
+                  <Textarea
+                    id="dictionary-short"
+                    data-testid="dictionary-edit-short"
+                    value={draft.short}
+                    onChange={(event) => setDraft({ ...draft, short: event.target.value })}
+                    className="min-h-[54px] bg-white text-[11px]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="dictionary-full" className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Полный текст
+                  </Label>
+                  <Textarea
+                    id="dictionary-full"
+                    data-testid="dictionary-edit-full"
+                    value={draft.full}
+                    onChange={(event) => setDraft({ ...draft, full: event.target.value })}
+                    className="min-h-[90px] bg-white text-[11px]"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Цвет шрифта
+                  </Label>
+                  <div className="flex flex-wrap gap-1">
+                    {dictionaryColors.map((color) => (
+                      <button
+                        key={color.value || "default"}
+                        type="button"
+                        title={color.label}
+                        aria-label={color.label}
+                        aria-pressed={draft.color === color.value}
+                        onClick={() => setDraft({ ...draft, color: color.value })}
+                        className={`h-5 w-5 rounded-sm border ${
+                          draft.color === color.value ? "ring-2 ring-secondary ring-offset-1" : ""
+                        }`}
+                        style={{
+                          backgroundColor: color.value || "#ffffff",
+                          borderColor: "#c6ced9",
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="dictionary-parent" className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Подпункт к записи
+                  </Label>
+                  <select
+                    id="dictionary-parent"
+                    className="h-6 w-full rounded-sm border border-[#c6ced9] bg-white px-1 text-[11px]"
+                    value={draft.parentId}
+                    onChange={(event) => setDraft({ ...draft, parentId: event.target.value })}
+                  >
+                    <option value="">— самостоятельная запись —</option>
+                    {entries
+                      .filter(
+                        (entry) =>
+                          entry.section === draft.section &&
+                          entry.scope === draft.scope &&
+                          entry.id !== draft.id,
+                      )
+                      .map((entry) => (
+                        <option key={entry.id} value={entry.id}>
+                          {entry.short}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+                <div className="flex gap-1.5 pt-1">
+                  <Button
+                    size="sm"
+                    className="h-6 px-2 text-[11px]"
+                    data-testid="dictionary-save"
+                    disabled={!draft.short.trim()}
+                    onClick={commitDraft}
+                  >
+                    <Check className="mr-1 h-3 w-3" />
+                    ОК
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-6 px-2 text-[11px]"
+                    data-testid="dictionary-cancel"
+                    onClick={() => setDraft(null)}
+                  >
+                    <X className="mr-1 h-3 w-3" />
+                    Отмена
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] leading-snug text-muted-foreground">
+                Выберите запись слева, чтобы изменить её, или нажмите «Запись», чтобы добавить новую.
+              </p>
+            )}
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
 const DoctorDatabase = () => {
   const { toast } = useToast();
   const [doctors, setDoctors] = useState(loadDoctorUsers);
@@ -1410,9 +2193,16 @@ const DoctorDatabase = () => {
   const [panelMode, setPanelMode] = useState<PanelMode>(loadPanelMode);
   const [panelWidth, setPanelWidth] = useState(loadPanelWidth);
   const [scheduleSelectionId, setScheduleSelectionId] = useState("");
-  const [suggestionsByLabel, setSuggestionsByLabel] = useState(loadAllSuggestions);
+  const [dictionaryEntries, setDictionaryEntries] = useState(loadDictionaries);
+  const [dictionariesOpen, setDictionariesOpen] = useState(false);
+  const [dictionarySection, setDictionarySection] = useState("");
   const recordsRef = useRef(records);
+  const dictionaryRef = useRef(dictionaryEntries);
   const pendingActionRef = useRef<((sourceRecords: MedicalRecords) => void) | null>(null);
+
+  useEffect(() => {
+    dictionaryRef.current = dictionaryEntries;
+  }, [dictionaryEntries]);
 
   useEffect(() => {
     localStorage.setItem(panelModeStorageKey, panelMode);
@@ -1429,27 +2219,52 @@ const DoctorDatabase = () => {
     Math.min(panelWidth, Math.round(window.innerWidth * 0.5)),
   );
 
+  /**
+   * Сведение справочников с сервером.
+   *
+   * Сервер — источник истины для того, что на нём уже есть, но записи,
+   * созданные в офлайне, там отсутствуют. Молча выбросить их значило бы
+   * стереть работу врача, поэтому недостающие остаются и досылаются следом.
+   */
+  const mergeServerDictionaries = (serverEntries: DictionaryEntry[]) => {
+    const localEntries = dictionaryRef.current;
+    const serverIds = new Set(serverEntries.map((entry) => entry.id));
+    const missing = localEntries.filter((entry) => !serverIds.has(entry.id));
+    const merged = sortEntries([...serverEntries.map(normalizeEntry), ...missing]);
+
+    dictionaryRef.current = merged;
+    setDictionaryEntries(merged);
+    saveDictionaries(merged);
+    missing.forEach((entry) => {
+      apiSaveDictionaryEntry(entry).catch(() => undefined);
+    });
+  };
+
   useEffect(() => {
     let cancelled = false;
 
-    const boot = async () => {
-      const localSession = loadAuthSession();
+    const boot = async () => {      const localSession = loadAuthSession();
       let availableDoctors = loadDoctorUsers();
       let availableRecords = loadRecords();
       let activeSession = localSession;
 
       try {
-        const [serverSession, serverDoctors, serverRecords, serverSuggestions] = await Promise.all([
+        const [serverSession, serverDoctors, serverRecords, serverDictionary] = await Promise.all([
           apiGetSession(),
           apiGetDoctors(),
           apiGetRecords(),
-          apiGetSuggestions(),
+          apiGetDictionaries(),
         ]);
         activeSession = serverSession ?? localSession;
         availableDoctors = serverDoctors;
         availableRecords = serverRecords as MedicalRecords;
-        if (!cancelled) {
-          setSuggestionsByLabel({ ...defaultSuggestions, ...serverSuggestions });
+
+        // Справочники сводим, а не затираем: записи, созданные в офлайне,
+        // на сервере отсутствуют, и молча выбросить их значило бы стереть
+        // работу врача. Недостающие отправляем следом — тихо, чтобы
+        // недоступный сервер не мешал работать.
+        if (!cancelled && Array.isArray(serverDictionary)) {
+          mergeServerDictionaries(serverDictionary as DictionaryEntry[]);
         }
       } catch (error) {
         if (!isApiUnavailable(error) && !cancelled) {
@@ -1568,9 +2383,125 @@ const DoctorDatabase = () => {
     printTemplates[0] ??
     defaultPrintTemplates[0];
 
-  const activeSuggestions = activeSuggestionTarget
-    ? suggestionsByLabel[activeSuggestionTarget.label] ?? defaultSuggestions[activeSuggestionTarget.label] ?? []
-    : [];
+  const activeSection = activeSuggestionTarget?.label ?? "";
+
+  const activeEntries = useMemo(
+    () => dictionaryEntries.filter((entry) => entry.section === activeSection),
+    [dictionaryEntries, activeSection],
+  );
+
+  /** Тексты раздела — для проверки дублей и вставки в поле. */
+  const activeSuggestions = useMemo(
+    () => suggestionTextsFor(dictionaryEntries, activeSection),
+    [dictionaryEntries, activeSection],
+  );
+
+  /**
+   * Единая точка изменения справочников.
+   *
+   * Пишем в localStorage сразу, а на сервер — «выстрелил и забыл»: программа
+   * должна работать и без него, а следующая загрузка сведёт обе стороны.
+   */
+  const mutateDictionaries = (updater: (current: DictionaryEntry[]) => DictionaryEntry[]) => {
+    const next = sortEntries(updater(dictionaryRef.current));
+    dictionaryRef.current = next;
+    setDictionaryEntries(next);
+    saveDictionaries(next);
+    return next;
+  };
+
+  const persistDictionaryEntry = (entry: DictionaryEntry) => {
+    mutateDictionaries((current) =>
+      current.some((item) => item.id === entry.id)
+        ? current.map((item) => (item.id === entry.id ? entry : item))
+        : [...current, entry],
+    );
+    apiSaveDictionaryEntry(entry).catch(() => undefined);
+  };
+
+  const removeDictionaryEntry = (id: string) => {
+    mutateDictionaries((current) => current.filter((entry) => entry.id !== id));
+    apiDeleteDictionaryEntry(id).catch(() => undefined);
+  };
+
+  /** Порядковый номер для новой записи в конце раздела. */
+  const nextOrderInSection = (section: string) =>
+    dictionaryEntries
+      .filter((entry) => entry.section === section)
+      .reduce((max, entry) => Math.max(max, entry.order + 1), 0);
+
+  /**
+   * Групповая вставка из буфера.
+   *
+   * Сначала пробуем сервер: он сам выдаёт идентификаторы и возвращает готовый
+   * список, поэтому локальные записи не приходится потом сверять с серверными.
+   * Если сервер недоступен — остаёмся на локальных, чтобы работа не пропала.
+   */
+  const importDictionaryEntries = async (
+    section: string,
+    items: Array<{ short: string; full: string }>,
+  ) => {
+    const baseOrder = nextOrderInSection(section);
+    const payload = items.map((item, index) => ({
+      section,
+      short: item.short,
+      full: item.full,
+      color: "",
+      parentId: "",
+      order: baseOrder + index,
+    }));
+
+    try {
+      const serverEntries = await apiImportDictionaryEntries(payload);
+      mergeServerDictionaries(serverEntries as DictionaryEntry[]);
+    } catch {
+      mutateDictionaries((current) => [
+        ...current,
+        ...payload.map((item) => ({
+          ...item,
+          id: crypto.randomUUID(),
+          scope: "personal" as DictionaryScope,
+        })),
+      ]);
+    }
+
+    toast({
+      title: "Записи добавлены",
+      description: `${items.length} шт. в разделе «${section}».`,
+    });
+    return items.length;
+  };
+
+  /**
+   * Удаление из полного экрана. Для общей записи спрашиваем подтверждение:
+   * она принадлежит всем врачам, и промах мышью не должен её стирать.
+   */
+  const deleteDictionaryEntry = (entry: DictionaryEntry) => {
+    if (
+      entry.scope === "global" &&
+      !window.confirm("Удалить запись из общего справочника? Она исчезнет у всех врачей.")
+    ) {
+      return;
+    }
+    removeDictionaryEntry(entry.id);
+  };
+
+  /**
+   * Открыть экран справочников на нужном разделе.
+   *
+   * Раздел берём тот, у которого врач вызвал подсказку. Если записей там нет,
+   * открываем первый непустой: пустой список на входе читается как «справочник
+   * пуст», хотя записи просто лежат в других разделах.
+   */
+  const openDictionaries = (preferredSection: string = activeSection) => {
+    const preferred = preferredSection || dictionarySections[0] || "";
+    const hasPreferred = dictionaryEntries.some(
+      (entry) => entry.section === preferred && entry.scope === "personal",
+    );
+    const fallback = dictionaryEntries.find((entry) => entry.scope === "personal")?.section;
+    setDictionarySection(hasPreferred ? preferred : fallback ?? preferred);
+    setDictionariesOpen(true);
+  };
 
   const activateSuggestionTarget = (target: SuggestionTarget) => {
     setActiveSuggestionTarget(target);
@@ -1581,17 +2512,32 @@ const DoctorDatabase = () => {
     if (!activeSuggestionTarget) return;
     const nextPhrase = suggestionPhrase.trim();
     if (!nextPhrase || activeSuggestions.includes(nextPhrase)) return;
-    const nextSuggestions = [...activeSuggestions, nextPhrase];
-    setSuggestionsByLabel((current) => ({ ...current, [activeSuggestionTarget.label]: nextSuggestions }));
-    persistSuggestions(activeSuggestionTarget.label, nextSuggestions);
+
+    persistDictionaryEntry({
+      id: crypto.randomUUID(),
+      section: activeSuggestionTarget.label,
+      short: nextPhrase,
+      full: "",
+      color: "",
+      parentId: "",
+      order: nextOrderInSection(activeSuggestionTarget.label),
+      scope: "personal",
+    });
     setSuggestionPhrase("");
   };
 
+  /**
+   * Удаление из панели. Общую запись так не убрать: она принадлежит всем
+   * врачам, и один щелчок в узкой панели — слишком дешёвый способ стереть
+   * её у коллег. Общие правятся на экране «Справочники».
+   */
   const deleteActiveSuggestion = (suggestion: string) => {
     if (!activeSuggestionTarget) return;
-    const nextSuggestions = activeSuggestions.filter((item) => item !== suggestion);
-    setSuggestionsByLabel((current) => ({ ...current, [activeSuggestionTarget.label]: nextSuggestions }));
-    persistSuggestions(activeSuggestionTarget.label, nextSuggestions);
+    const own = activeEntries.find(
+      (entry) => entry.scope === "personal" && entry.short === suggestion,
+    );
+    if (!own) return;
+    removeDictionaryEntry(own.id);
   };
 
   const updateDraftRecords = (nextRecords: MedicalRecords) => {
@@ -1746,16 +2692,18 @@ const DoctorDatabase = () => {
         toast({ title: "Вход не выполнен", description: "Для базы приемов нужен логин врача." });
         return;
       }
-      const [serverDoctors, serverRecords, serverSuggestions] = await Promise.all([
+      const [serverDoctors, serverRecords, serverDictionary] = await Promise.all([
         apiGetDoctors(),
         apiGetRecords(),
-        apiGetSuggestions(),
+        apiGetDictionaries(),
       ]);
       availableDoctors = serverDoctors;
       foundDoctor = availableDoctors.find((item) => item.id === session.doctorId);
       recordsRef.current = serverRecords as MedicalRecords;
       setRecords(serverRecords as MedicalRecords);
-      setSuggestionsByLabel({ ...defaultSuggestions, ...serverSuggestions });
+      if (Array.isArray(serverDictionary)) {
+        mergeServerDictionaries(serverDictionary as DictionaryEntry[]);
+      }
       saveAuthSession(session);
     } catch (error) {
       if (!isApiUnavailable(error)) {
@@ -2201,6 +3149,16 @@ const DoctorDatabase = () => {
           />
 
           <div className="ml-auto flex flex-wrap gap-1.5">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openDictionaries()}
+              className="h-6 px-2 text-[11px]"
+              data-testid="dictionaries-button"
+            >
+              <BookOpen className="mr-1 h-3 w-3" />
+              Справочники
+            </Button>
             <Button variant="outline" size="sm" onClick={addPatient} className="h-6 px-2 text-[11px]">
               <Plus className="mr-1 h-3 w-3" />
               Пациент
@@ -2421,8 +3379,8 @@ const DoctorDatabase = () => {
             />
           ) : (
             <SuggestionPanel
-              label={activeSuggestionTarget?.label ?? ""}
-              suggestions={activeSuggestions}
+              label={activeSection}
+              entries={activeEntries}
               phrase={suggestionPhrase}
               onPhraseChange={setSuggestionPhrase}
               onAdd={addActiveSuggestion}
@@ -2430,10 +3388,22 @@ const DoctorDatabase = () => {
               onPick={(value) => activeSuggestionTarget?.insert(value)}
               onClose={() => setActiveSuggestionTarget(null)}
               onToggleMode={() => setPanelMode("schedule")}
+              onOpenDictionaries={() => openDictionaries()}
             />
           )}
         </div>
       </main>
+
+      <DictionariesDialog
+        open={dictionariesOpen}
+        onOpenChange={setDictionariesOpen}
+        entries={dictionaryEntries}
+        initialSection={dictionarySection}
+        onSave={persistDictionaryEntry}
+        onDelete={deleteDictionaryEntry}
+        onImport={importDictionaryEntries}
+      />
+
       <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
         <DialogContent className="max-w-4xl">
           <DialogHeader>

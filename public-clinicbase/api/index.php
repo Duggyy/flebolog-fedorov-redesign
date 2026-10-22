@@ -61,6 +61,10 @@ try {
         'records_save' => handle_records_save($pdo),
         'suggestions' => handle_suggestions($pdo),
         'suggestions_save' => handle_suggestions_save($pdo),
+        'dictionaries' => handle_dictionaries($pdo),
+        'dictionary_save' => handle_dictionary_save($pdo),
+        'dictionary_delete' => handle_dictionary_delete($pdo),
+        'dictionaries_import' => handle_dictionaries_import($pdo),
         default => respond(404, ['error' => 'unknown_action']),
     };
 } catch (Throwable $error) {
@@ -375,6 +379,228 @@ function null_if_empty(mixed $value): ?string
 {
     $string = trim((string)$value);
     return $string === '' ? null : $string;
+}
+
+/**
+ * Запись справочника в том виде, в каком её ждёт клиент.
+ *
+ * Наружу отдаём scope, а не doctor_id: врачу незачем знать идентификаторы
+ * чужих личных справочников, а интерфейсу нужно ровно одно поле, чтобы
+ * разложить записи по вкладкам «Общие» и «Мои».
+ */
+function dictionary_to_client(array $row): array
+{
+    return [
+        'id' => (string)$row['id'],
+        'section' => (string)$row['section'],
+        'short' => (string)$row['short_text'],
+        'full' => (string)($row['full_text'] ?? ''),
+        'color' => (string)($row['color'] ?? ''),
+        'parentId' => (string)($row['parent_id'] ?? ''),
+        'order' => (int)$row['sort_order'],
+        'scope' => $row['doctor_id'] === null ? 'global' : 'personal',
+    ];
+}
+
+/**
+ * Проверка и нормализация записи справочника. null — запись негодная.
+ *
+ * Идентификатор приходит с клиента: записи создаются и в офлайн-режиме,
+ * поэтому генерировать его на сервере значило бы терять связь с тем, что
+ * уже лежит в браузере врача. Заодно это делает сохранение идемпотентным —
+ * повторная отправка той же записи не создаёт вторую.
+ */
+function normalize_dictionary_entry(mixed $entry): ?array
+{
+    if (!is_array($entry)) {
+        return null;
+    }
+
+    $id = trim((string)($entry['id'] ?? ''));
+    $section = trim((string)($entry['section'] ?? ''));
+    $short = trim((string)($entry['short'] ?? ''));
+    if ($id === '' || $section === '' || $short === '') {
+        return null;
+    }
+
+    // Цвет принимаем только как #rrggbb. Любое другое значение уехало бы
+    // в style и стало либо невидимым текстом, либо дырой в вёрстке.
+    $color = trim((string)($entry['color'] ?? ''));
+    if (!preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
+        $color = '';
+    }
+
+    return [
+        'id' => mb_substr($id, 0, 64),
+        'section' => mb_substr($section, 0, 180),
+        'short' => mb_substr($short, 0, 500),
+        'full' => (string)($entry['full'] ?? ''),
+        'color' => $color,
+        'parentId' => mb_substr(trim((string)($entry['parentId'] ?? '')), 0, 64),
+        'order' => (int)($entry['order'] ?? 0),
+        'scope' => ($entry['scope'] ?? 'personal') === 'global' ? 'global' : 'personal',
+    ];
+}
+
+/**
+ * Записать одну запись справочника.
+ *
+ * Область уже существующей записи не меняется: иначе врач мог бы «повысить»
+ * свою личную запись до общей одним запросом, и она всплыла бы у всех коллег.
+ */
+function save_dictionary_entry(PDO $pdo, array $entry): void
+{
+    $isAdmin = ($_SESSION['role'] ?? '') === 'admin';
+    $doctorId = $isAdmin ? null : (string)($_SESSION['doctor_id'] ?? '');
+
+    $existing = query_all($pdo, 'SELECT doctor_id FROM dictionary_entries WHERE id = ?', [$entry['id']]);
+    $ownerId = $entry['scope'] === 'global' || $isAdmin ? null : $doctorId;
+
+    if ($existing) {
+        $owner = $existing[0]['doctor_id'];
+        if (!$isAdmin && $owner !== null && (string)$owner !== $doctorId) {
+            respond(403, ['error' => 'forbidden']);
+        }
+        $ownerId = $owner === null ? null : $doctorId;
+    }
+
+    $pdo->prepare(
+        'INSERT INTO dictionary_entries
+            (id, doctor_id, section, short_text, full_text, color, parent_id, sort_order)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+         ON DUPLICATE KEY UPDATE
+            doctor_id = VALUES(doctor_id),
+            section = VALUES(section),
+            short_text = VALUES(short_text),
+            full_text = VALUES(full_text),
+            color = VALUES(color),
+            parent_id = VALUES(parent_id),
+            sort_order = VALUES(sort_order)'
+    )->execute([
+        $entry['id'],
+        $ownerId,
+        $entry['section'],
+        $entry['short'],
+        null_if_empty($entry['full']),
+        null_if_empty($entry['color']),
+        null_if_empty($entry['parentId']),
+        $entry['order'],
+    ]);
+}
+
+function handle_dictionaries(PDO $pdo): never
+{
+    require_logged_in();
+    $doctorId = ($_SESSION['role'] ?? '') === 'doctor' ? (string)$_SESSION['doctor_id'] : null;
+
+    $params = [];
+    $sql = 'SELECT id, doctor_id, section, short_text, full_text, color, parent_id, sort_order
+            FROM dictionary_entries
+            WHERE doctor_id IS NULL';
+    if ($doctorId !== null) {
+        $sql .= ' OR doctor_id = ?';
+        $params[] = $doctorId;
+    }
+    $sql .= ' ORDER BY section, sort_order, short_text';
+
+    // Раньше здесь склеивались области: результат был словарём label => массив,
+    // и личная запись молча затирала общую с тем же именем поля. Теперь каждая
+    // строка несёт свой scope, и терять нечего.
+    respond(200, [
+        'entries' => array_map('dictionary_to_client', query_all($pdo, $sql, $params)),
+    ]);
+}
+
+function handle_dictionary_save(PDO $pdo): never
+{
+    require_logged_in();
+    $entry = normalize_dictionary_entry(read_json()['entry'] ?? null);
+    if ($entry === null) {
+        respond(422, ['error' => 'invalid_entry']);
+    }
+
+    save_dictionary_entry($pdo, $entry);
+    respond(200, ['ok' => true]);
+}
+
+function handle_dictionary_delete(PDO $pdo): never
+{
+    require_logged_in();
+    $id = trim((string)(read_json()['id'] ?? ''));
+    if ($id === '') {
+        respond(422, ['error' => 'invalid_id']);
+    }
+
+    $existing = query_all($pdo, 'SELECT doctor_id FROM dictionary_entries WHERE id = ?', [$id]);
+    if (!$existing) {
+        // Уже удалена — это не ошибка: повторное нажатие не должно ругаться.
+        respond(200, ['ok' => true]);
+    }
+
+    $owner = $existing[0]['doctor_id'];
+    if (($_SESSION['role'] ?? '') !== 'admin'
+        && $owner !== null
+        && (string)$owner !== (string)($_SESSION['doctor_id'] ?? '')) {
+        respond(403, ['error' => 'forbidden']);
+    }
+
+    $pdo->prepare('DELETE FROM dictionary_entries WHERE id = ?')->execute([$id]);
+    respond(200, ['ok' => true]);
+}
+
+/**
+ * Групповая вставка — «Вставить из буфера».
+ *
+ * Идентификаторы здесь генерирует сервер: вставляют обычно текст, а не готовые
+ * записи, и совпасть с чьим-то чужим id случайно было бы обидно. Клиент после
+ * импорта забирает список заново, поэтому расхождение id ему не мешает.
+ */
+function handle_dictionaries_import(PDO $pdo): never
+{
+    require_logged_in();
+    $rawEntries = read_json()['entries'] ?? [];
+    if (!is_array($rawEntries)) {
+        respond(422, ['error' => 'invalid_entries']);
+    }
+
+    $isAdmin = ($_SESSION['role'] ?? '') === 'admin';
+    $doctorId = $isAdmin ? null : (string)($_SESSION['doctor_id'] ?? '');
+    $scope = ($_SESSION['role'] ?? '') === 'admin' ? 'global' : 'personal';
+
+    $pdo->beginTransaction();
+    $saved = 0;
+    foreach ($rawEntries as $raw) {
+        if (!is_array($raw)) {
+            continue;
+        }
+        // array_merge, а не «+»: если клиент прислал пустой id, «+» его
+        // сохранил бы (ключ уже есть), и проверка отбросила бы запись.
+        $entry = normalize_dictionary_entry(array_merge($raw, ['id' => 'import', 'scope' => $scope]));
+        if ($entry === null) {
+            continue;
+        }
+        $entry['id'] = bin2hex(random_bytes(16));
+        $entry['scope'] = $scope;
+
+        $pdo->prepare(
+            'INSERT INTO dictionary_entries
+                (id, doctor_id, section, short_text, full_text, color, parent_id, sort_order)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([
+            $entry['id'],
+            $doctorId,
+            $entry['section'],
+            $entry['short'],
+            null_if_empty($entry['full']),
+            null_if_empty($entry['color']),
+            null_if_empty($entry['parentId']),
+            $entry['order'],
+        ]);
+        $saved++;
+    }
+    $pdo->commit();
+
+    handle_dictionaries($pdo);
 }
 
 function normalize_date(mixed $value): string

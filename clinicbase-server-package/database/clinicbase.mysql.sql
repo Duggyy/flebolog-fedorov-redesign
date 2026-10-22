@@ -85,16 +85,45 @@ CREATE TABLE visits (
   INDEX idx_visits_doctor_date (doctor_id, record_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Устаревшее хранение подсказок: массив строк на пару (врач, поле).
+-- Оставлено ради переноса в dictionary_entries и для старых сборок.
+--
+-- scope_key существует только потому, что MySQL считает NULL-ы различными
+-- и UNIQUE (doctor_id, label) не срабатывал для общих записей: каждая
+-- перезапись добавляла новую строку вместо обновления. Генерируемый столбец
+-- превращает NULL в пустую строку, и уникальность начинает работать.
 CREATE TABLE field_suggestions (
   id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
   doctor_id VARCHAR(64) NULL,
   label VARCHAR(180) NOT NULL,
   suggestions_json JSON NOT NULL,
+  scope_key VARCHAR(64) GENERATED ALWAYS AS (COALESCE(doctor_id, '')) STORED,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uniq_suggestions_scope (doctor_id, label),
+  UNIQUE KEY uniq_suggestions_scope (scope_key, label),
   CONSTRAINT fk_suggestions_doctor
     FOREIGN KEY (doctor_id) REFERENCES doctors(id)
     ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Справочники: запись справочника — строка таблицы, а не элемент массива.
+-- Так у записи есть краткое имя, полный текст, цвет, родитель и порядок.
+-- doctor_id IS NULL — общий справочник, иначе личный справочник врача.
+CREATE TABLE dictionary_entries (
+  id VARCHAR(64) NOT NULL PRIMARY KEY,
+  doctor_id VARCHAR(64) NULL,
+  section VARCHAR(180) NOT NULL,
+  short_text VARCHAR(500) NOT NULL,
+  full_text TEXT NULL,
+  color VARCHAR(16) NULL,
+  parent_id VARCHAR(64) NULL,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  CONSTRAINT fk_dictionary_doctor
+    FOREIGN KEY (doctor_id) REFERENCES doctors(id)
+    ON DELETE CASCADE,
+  INDEX idx_dictionary_scope (doctor_id, section, sort_order),
+  INDEX idx_dictionary_parent (parent_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Первый врач для проверки. Пароль: 1234

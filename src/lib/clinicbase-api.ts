@@ -93,4 +93,41 @@ export const apiSaveSuggestions = async (label: string, suggestions: string[]) =
   await post<{ ok: true }>("suggestions_save", { label, suggestions });
 };
 
+/** Запись справочника: краткое имя, полный текст, цвет и подпункты. */
+export type DictionaryEntryPayload = {
+  id: string;
+  section: string;
+  short: string;
+  full: string;
+  color: string;
+  parentId: string;
+  order: number;
+  scope: "global" | "personal";
+};
+
+export const apiGetDictionaries = async () => {
+  const payload = await request<{ entries: DictionaryEntryPayload[] }>("dictionaries");
+  return payload.entries;
+};
+
+export const apiSaveDictionaryEntry = async (entry: DictionaryEntryPayload) => {
+  await post<{ ok: true }>("dictionary_save", { entry });
+};
+
+export const apiDeleteDictionaryEntry = async (id: string) => {
+  await post<{ ok: true }>("dictionary_delete", { id });
+};
+
+/**
+ * Групповая вставка. Возвращает полный список записей: сервер генерирует
+ * идентификаторы сам, и клиенту проще забрать результат целиком, чем
+ * сопоставлять отправленное с полученным.
+ */
+export const apiImportDictionaryEntries = async (
+  entries: Array<Omit<DictionaryEntryPayload, "id" | "scope">>,
+) => {
+  const payload = await post<{ entries: DictionaryEntryPayload[] }>("dictionaries_import", { entries });
+  return payload.entries;
+};
+
 export const isApiUnavailable = (error: unknown) => error instanceof ApiUnavailableError;
