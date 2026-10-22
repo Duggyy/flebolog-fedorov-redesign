@@ -1738,11 +1738,25 @@ const DictionariesDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    setSection(initialSection);
+    // Если личных записей нет вовсе, открываем «Общие»: новый врач при первом
+    // заходе иначе увидит пустой экран и решит, что справочников нет.
+    const targetScope: DictionaryScope = entries.some((entry) => entry.scope === "personal")
+      ? "personal"
+      : "global";
+    const hasInSection = entries.some(
+      (entry) => entry.section === initialSection && entry.scope === targetScope,
+    );
+    const firstFilled = entries.find((entry) => entry.scope === targetScope)?.section;
+
+    setScope(targetScope);
+    setSection(hasInSection || !firstFilled ? initialSection : firstFilled);
     setSearch("");
     setDraft(null);
     setImportMode(false);
     setImportText("");
+    // entries в зависимостях намеренно нет: иначе сохранение записи сбрасывало
+    // бы открытый редактор прямо под руками.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initialSection]);
 
   // Разделы — поля формы плюс всё, что уже встречается в записях. Второе
