@@ -1,5 +1,14 @@
 -- Справочники ClinicBase: оба шага одним файлом.
 --
+-- !!! ФАЙЛ ИСТОРИЧЕСКИЙ, ПОВТОРНО ЗАПУСКАТЬ НЕ НУЖНО. !!!
+-- Он применён 23.10.2026: таблица dictionary_entries создана, старые подсказки
+-- перенесены. Заново он не пройдёт: проверки ниже обращаются к служебной базе
+-- information_schema, а у пользователя MySQL на этом хостинге на неё нет прав —
+-- импорт обрывается на первом же таком запросе с
+--   #1044 Access denied for user 'u3452052'@'localhost' to database 'information_schema'
+-- Для оставшегося шага (длина текста записи) есть отдельный файл без таких
+-- проверок: database/migrations/2026-10-23-dictionary-short-text-long.sql.
+--
 -- Склеено из двух миграций, потому что порядок важен, а второй шаг меняет
 -- таблицу, созданную первым:
 --   1) 2026-10-23-dictionary-entries.sql      — создать таблицу справочников
@@ -150,72 +159,39 @@ PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
 
--- Краткое имя записи справочника перестало быть коротким.
+-- Расширить текст записи справочника до 2000 знаков.
 --
 -- В шаблоне истории болезни («Шаблон ИБ 2026_10.docx») назначения записаны
 -- готовыми фразами: самое длинное — 650 знаков. Колонка была VARCHAR(500),
--- и сервер обрезал бы хвост рецепта молча: врач увидел бы в базе правдоподобный,
--- но неполный текст. Проверено на живой базе 23.10.2026: запись длиной 650
--- знаков сохранилась с ответом «ok», а прочиталась обратно как 500 знаков.
--- Молча — потому что на этом хостинге выключен строгий режим MySQL: в строгом
--- вместо обрезки была бы ошибка #1406 «Data too long». Именно поэтому ширину
--- колонки нельзя оставлять «на потом»: потеря никак не проявляется.
+-- и сервер обрезал хвост рецепта молча: врач увидел бы в базе правдоподобный,
+-- но неполный текст. Проверено на живой базе 23.10.2026 — запись длиной
+-- 650 знаков сохранилась с ответом «ok», а прочиталась обратно как 500 знаков.
+-- Молча, потому что на этом хостинге выключен строгий режим MySQL: в строгом
+-- вместо обрезки была бы ошибка #1406 «Data too long».
 --
--- Почему VARCHAR, а не TEXT. 23.10.2026 смена типа на TEXT упала на живой базе
--- с ошибкой #1215 «Cannot add foreign key constraint»: смена класса хранения
--- перестраивает таблицу целиком, а при перестройке MySQL заново создаёт
--- внешний ключ dictionary_entries.doctor_id → doctors.id. Удлинение VARCHAR
--- с 500 до 2000 делается на месте (у обоих значений двухбайтовый префикс
--- длины), таблица не перестраивается, внешнего ключа не касается.
+-- Почему VARCHAR, а не TEXT. Смена типа на TEXT меняет класс хранения,
+-- таблица перестраивается целиком, и при перестройке MySQL заново создаёт
+-- внешний ключ dictionary_entries.doctor_id → doctors.id. На этой базе такое
+-- падало с ошибкой #1215 «Cannot add foreign key constraint». Удлинение VARCHAR
+-- с 500 до 2000 делается на месте, таблица не перестраивается, ключа не касается.
 --
--- Почему ширина выбирается запросом, а не вписана числом. VARCHAR(2000)
--- в utf8mb4 — это 8000 байт, а вместе с остальными колонками таблицы
--- набирается около 9600. InnoDB в формате строки DYNAMIC длинные колонки
--- выносит за пределы страницы и такое пропускает, а в COMPACT/REDUNDANT
--- отказывается: «#1118 Row size too large (> 8126)». Какой формат у базы
--- на хостинге, снаружи не видно, поэтому ширина берётся по факту: DYNAMIC —
--- 2000 (совпадает с ограничением в api/index.php), иначе 1000 — это 4000 байт,
--- и строка целиком укладывается в 8126 при любом формате.
+-- Почему в файле нет ни одного запроса к information_schema. Первый вариант
+-- файла сам проверял формат строки таблицы и текущую ширину колонки — и упал
+-- с ошибкой #1044 «Access denied for user 'u3452052'@'localhost' to database
+-- 'information_schema'»: на этом хостинге у пользователя MySQL нет прав на
+-- служебные таблицы. Поэтому здесь только те запросы, которые работают от прав
+-- на собственную базу: SHOW (показать) и ALTER (изменить).
 --
--- Повторный запуск безопасен: если колонка уже не уже нужной, ALTER не выполняется.
+-- Повторный запуск безопасен: ALTER в то же самое определение ничего не меняет.
 
-SET @row_format := (
-  SELECT ROW_FORMAT
-  FROM information_schema.TABLES
-  WHERE TABLE_SCHEMA = DATABASE()
-    AND TABLE_NAME = 'dictionary_entries'
-);
+-- 1. Что сейчас: одна строка, смотрим колонку Type.
+SHOW COLUMNS FROM dictionary_entries LIKE 'short_text';
 
-SET @short_len := IF(@row_format IN ('Dynamic', 'Compressed'), 2000, 1000);
+-- 2. Расширить.
+ALTER TABLE dictionary_entries
+  MODIFY COLUMN short_text VARCHAR(2000) NOT NULL;
 
-SET @current_len := (
-  SELECT COALESCE(CHARACTER_MAXIMUM_LENGTH, 0)
-  FROM information_schema.COLUMNS
-  WHERE TABLE_SCHEMA = DATABASE()
-    AND TABLE_NAME = 'dictionary_entries'
-    AND COLUMN_NAME = 'short_text'
-);
-
-SET @sql := IF(
-  @current_len >= @short_len,
-  'DO 0',
-  CONCAT(
-    'ALTER TABLE dictionary_entries ',
-    'MODIFY COLUMN short_text VARCHAR(', @short_len, ') NOT NULL'
-  )
-);
-PREPARE stmt FROM @sql;
-EXECUTE stmt;
-DEALLOCATE PREPARE stmt;
-
--- Итог видно сразу: phpMyAdmin покажет эту строку в результате импорта.
--- Если в ней 2000 или 1000 — шаг выполнен. Если 500 — ALTER не прошёл,
--- смотрите текст ошибки выше.
-SELECT
-  COLUMN_TYPE AS short_text_type,
-  CHARACTER_MAXIMUM_LENGTH AS max_chars,
-  @row_format AS table_row_format
-FROM information_schema.COLUMNS
-WHERE TABLE_SCHEMA = DATABASE()
-  AND TABLE_NAME = 'dictionary_entries'
-  AND COLUMN_NAME = 'short_text';
+-- 3. Что стало. В результате импорта phpMyAdmin покажет именно эту строку:
+--    Type = varchar(2000) — шаг выполнен.
+--    Type = varchar(500)  — ALTER не прошёл, смотрите текст ошибки выше.
+SHOW COLUMNS FROM dictionary_entries LIKE 'short_text';
