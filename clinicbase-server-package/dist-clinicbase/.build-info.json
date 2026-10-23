@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "14501916b88dc9d455b799d2a9aa56d941acc2ea",
-  "shortSha": "1450191",
-  "subject": "ClinicBase: «Информация» и «Справочники» переехали в верхнюю панель",
-  "builtAt": "2026-10-23T16:53:35.556Z",
-  "dirty": false
+  "sha": "b3202a8c06456a828eb1717cb27c54d4263469c8",
+  "shortSha": "b3202a8",
+  "subject": "Пакет ClinicBase: перештампован под 1450191",
+  "builtAt": "2026-10-23T17:06:46.027Z",
+  "dirty": true
 }

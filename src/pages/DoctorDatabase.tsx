@@ -708,8 +708,11 @@ const buildInitialDictionaries = (): DictionaryEntry[] => {
     }
   }
 
+  // Раньше раздел из старого ключа заменял умолчания целиком: оба набора
+  // лежали в одном списке, и каждая строка задвоилась бы. Теперь у них разные
+  // вкладки — «Общие» и «Личные», — поэтому умолчания остаются на месте:
+  // это справочник клиники, а старый ключ — личные записи врача.
   Object.entries(defaultSuggestions).forEach(([section, items]) => {
-    if (legacy && Object.prototype.hasOwnProperty.call(legacy, section)) return;
     items.forEach((text, index) => {
       entries.push({
         id: stableId("global", section, text),
@@ -892,11 +895,19 @@ type PanelMode = "dictionary" | "schedule";
 
 const panelModeStorageKey = "clinicbase-panel-mode-v1";
 const panelWidthStorageKey = "clinicbase-panel-width-v1";
+const panelScopeStorageKey = "clinicbase-panel-scope-v1";
 const PANEL_MIN_WIDTH = 260;
 
 /** Режим правой области помнится: врач открывает программу в своём режиме. */
 const loadPanelMode = (): PanelMode =>
   localStorage.getItem(panelModeStorageKey) === "schedule" ? "schedule" : "dictionary";
+
+/**
+ * Активная вкладка панели. По умолчанию «Общие»: это справочник клиники, из
+ * него берут формулировки. «Личные» помнятся, если врач сам туда перешёл.
+ */
+const loadPanelScope = (): DictionaryScope =>
+  localStorage.getItem(panelScopeStorageKey) === "personal" ? "personal" : "global";
 
 const loadPanelWidth = () => {
   const saved = Number(localStorage.getItem(panelWidthStorageKey));
@@ -1122,6 +1133,8 @@ const SchedulePanel = ({
 const SuggestionPanel = ({
   label,
   entries,
+  scope,
+  onScopeChange,
   phrase,
   onPhraseChange,
   onAdd,
@@ -1131,7 +1144,10 @@ const SuggestionPanel = ({
   onOpenDictionaries,
 }: {
   label: string;
+  /** Все записи раздела — оба набора. Разделяет их вкладка, а не фильтр снаружи. */
   entries: DictionaryEntry[];
+  scope: DictionaryScope;
+  onScopeChange: (scope: DictionaryScope) => void;
   phrase: string;
   onPhraseChange: (value: string) => void;
   onAdd: () => void;
@@ -1142,21 +1158,75 @@ const SuggestionPanel = ({
 }) => {
   const [filter, setFilter] = useState("");
   const query = filter.trim().toLowerCase();
+
+  const countIn = (value: DictionaryScope) =>
+    entries.filter((entry) => entry.scope === value).length;
+  const scoped = entries.filter((entry) => entry.scope === scope);
   // Ищем и по краткому имени, и по полному тексту: врач помнит формулировку,
   // а не то, как он её сократил.
   const visible = query
-    ? entries.filter(
+    ? scoped.filter(
         (entry) =>
           entry.short.toLowerCase().includes(query) || entry.full.toLowerCase().includes(query),
       )
-    : entries;
+    : scoped;
 
   return (
     <aside
       data-testid="suggestion-panel"
       className="flex min-w-0 flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]"
     >
-      <PanelHeader title="Справочники" count={visible.length} onReset={onClose} />
+      <PanelHeader title="Справочники" onReset={onClose} />
+
+      {/* Счётчик переехал в сами вкладки: он нужен не «сколько всего», а
+          «сколько в каждом наборе» — иначе непонятно, куда смотреть.
+          Пока поле не выбрано, вкладок нет: «Общие 0 / Личные 0» — это шум,
+          а не навигация. */}
+      {label ? (
+        <div
+          className="flex gap-1 border-b border-[#c6ced9] bg-[#e7ebf1] p-1"
+          role="tablist"
+          aria-label="Область справочника"
+        >
+          {(
+            [
+              ["global", "Общие"],
+              ["personal", "Личные"],
+            ] as Array<[DictionaryScope, string]>
+          ).map(([value, title]) => {
+            const active = scope === value;
+            return (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                data-testid={`panel-tab-${value}`}
+                onClick={() => {
+                  onScopeChange(value);
+                  // Фильтр сбрасываем: он искал по прошлому набору, и в новом
+                  // легко получить «ничего не найдено» на ровном месте.
+                  setFilter("");
+                }}
+                className={`flex h-[18px] flex-1 items-center justify-center gap-1 rounded-sm border text-[10px] leading-none transition-colors ${
+                  active
+                    ? "border-[#185fa5] bg-white font-semibold text-[#0c447c]"
+                    : "border-transparent text-[#5a6675] hover:bg-white/60"
+                }`}
+              >
+                {title}
+                <span
+                  className={`rounded-sm px-1 text-[9px] ${
+                    active ? "bg-[#cfe3f7] text-[#0c447c]" : "bg-[#d5dbe4] text-[#5a6675]"
+                  }`}
+                >
+                  {countIn(value)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
 
       {label ? (
         <>
@@ -1229,8 +1299,12 @@ const SuggestionPanel = ({
                 </div>
               ))
             ) : (
-              <p className="px-1.5 py-1 text-[11px] text-muted-foreground">
-                {query ? "Ничего не найдено." : "Записей пока нет."}
+              <p className="px-1.5 py-1 text-[11px] leading-snug text-muted-foreground">
+                {query
+                  ? "Ничего не найдено."
+                  : scope === "personal"
+                    ? "В личных записях этого раздела пусто."
+                    : "В общих записях этого раздела пусто."}
               </p>
             )}
           </div>
@@ -1256,6 +1330,13 @@ const SuggestionPanel = ({
                 onClick={onAdd}
                 className="h-6 shrink-0 px-2 text-[11px]"
                 aria-label="Добавить запись"
+                // Куда именно уйдёт запись — неочевидно: вкладка активна, но
+                // «Общие» правит всех врачей. Пишем это в подсказке кнопки.
+                title={
+                  scope === "personal"
+                    ? "Добавить в «Личные» — видите только вы"
+                    : "Добавить в «Общие» — запись увидят все врачи"
+                }
               >
                 <Plus className="h-3 w-3" />
               </Button>
@@ -2224,6 +2305,7 @@ const DoctorDatabase = () => {
   const [activeSuggestionTarget, setActiveSuggestionTarget] = useState<SuggestionTarget | null>(null);
   const [suggestionPhrase, setSuggestionPhrase] = useState("");
   const [panelMode, setPanelMode] = useState<PanelMode>(loadPanelMode);
+  const [panelScope, setPanelScope] = useState<DictionaryScope>(loadPanelScope);
   const [panelWidth, setPanelWidth] = useState(loadPanelWidth);
   const [scheduleSelectionId, setScheduleSelectionId] = useState("");
   const [dictionaryEntries, setDictionaryEntries] = useState(loadDictionaries);
@@ -2240,6 +2322,10 @@ const DoctorDatabase = () => {
   useEffect(() => {
     localStorage.setItem(panelModeStorageKey, panelMode);
   }, [panelMode]);
+
+  useEffect(() => {
+    localStorage.setItem(panelScopeStorageKey, panelScope);
+  }, [panelScope]);
 
   useEffect(() => {
     localStorage.setItem(panelWidthStorageKey, String(panelWidth));
@@ -2423,10 +2509,20 @@ const DoctorDatabase = () => {
     [dictionaryEntries, activeSection],
   );
 
-  /** Тексты раздела — для проверки дублей и вставки в поле. */
+  /**
+   * Тексты раздела в активной вкладке — для проверки дублей.
+   *
+   * Именно в активной: одинаковая формулировка может законно жить и в «Общих»,
+   * и в «Личных» — вкладки их разделяют. Проверка по обоим наборам молча
+   * съедала бы нажатие «плюс», и врач решил бы, что кнопка не работает.
+   */
   const activeSuggestions = useMemo(
-    () => suggestionTextsFor(dictionaryEntries, activeSection),
-    [dictionaryEntries, activeSection],
+    () =>
+      suggestionTextsFor(
+        dictionaryEntries.filter((entry) => entry.scope === panelScope),
+        activeSection,
+      ),
+    [dictionaryEntries, activeSection, panelScope],
   );
 
   /**
@@ -2554,7 +2650,9 @@ const DoctorDatabase = () => {
       color: "",
       parentId: "",
       order: nextOrderInSection(activeSuggestionTarget.label),
-      scope: "personal",
+      // Новая запись уходит в открытую вкладку: врач видит «Общие» — значит,
+      // пишет в общие, и запись сразу появляется там, где он смотрит.
+      scope: panelScope,
     });
     setSuggestionPhrase("");
   };
@@ -3466,6 +3564,8 @@ const DoctorDatabase = () => {
             <SuggestionPanel
               label={activeSection}
               entries={activeEntries}
+              scope={panelScope}
+              onScopeChange={setPanelScope}
               phrase={suggestionPhrase}
               onPhraseChange={setSuggestionPhrase}
               onAdd={addActiveSuggestion}
