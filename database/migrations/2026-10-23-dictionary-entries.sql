@@ -84,15 +84,57 @@ SET @has_scope_key := (
 -- Генерируемый столбец вместо NULL в индексе. STORED, а не VIRTUAL: индекс
 -- по виртуальному столбцу MySQL тоже умеет, но STORED проще читать глазами
 -- при разборе базы.
+--
+-- Три шага вместо одного ALTER, и каждый проверяет, нужно ли ему что-то делать.
+-- Причина: база могла быть создана по разной версии схемы, и имя старого
+-- индекса в ней может быть другим (`doctor_id` вместо `uniq_suggestions_scope`).
+-- Жёсткий `DROP INDEX uniq_suggestions_scope` в такой базе падал бы с
+-- «check that column/key exists» и обрывал импорт на середине.
 SET @sql := IF(
   @has_scope_key = 0,
   'ALTER TABLE field_suggestions
-     DROP INDEX uniq_suggestions_scope,
-     ADD COLUMN scope_key VARCHAR(64) GENERATED ALWAYS AS (COALESCE(doctor_id, '''')) STORED,
-     ADD UNIQUE KEY uniq_suggestions_scope (scope_key, label)',
+     ADD COLUMN scope_key VARCHAR(64) GENERATED ALWAYS AS (COALESCE(doctor_id, '''')) STORED',
   'DO 0'
 );
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
 
+-- Старый уникальный индекс стоял на (doctor_id, label) и с NULL не работал.
+-- Удаляем его, только если он действительно есть и построен по doctor_id.
+SET @old_index := (
+  SELECT COUNT(*)
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'field_suggestions'
+    AND INDEX_NAME = 'uniq_suggestions_scope'
+    AND COLUMN_NAME = 'doctor_id'
+);
+
+SET @sql := IF(
+  @old_index > 0,
+  'ALTER TABLE field_suggestions DROP INDEX uniq_suggestions_scope',
+  'DO 0'
+);
+PREPARE stmt FROM @sql;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- Новый уникальный индекс по scope_key, если его ещё нет.
+SET @new_index := (
+  SELECT COUNT(*)
+  FROM information_schema.STATISTICS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'field_suggestions'
+    AND INDEX_NAME = 'uniq_suggestions_scope'
+    AND COLUMN_NAME = 'scope_key'
+);
+
+SET @sql := IF(
+  @new_index = 0,
+  'ALTER TABLE field_suggestions ADD UNIQUE KEY uniq_suggestions_scope (scope_key, label)',
+  'DO 0'
+);
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;
