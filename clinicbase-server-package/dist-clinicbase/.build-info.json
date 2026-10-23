@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "d32b1ca29a3ce04dd545d7db18d1b765f83e6a82",
-  "shortSha": "d32b1ca",
-  "subject": "Пакет ClinicBase: перештампован под 619a25b",
-  "builtAt": "2026-10-23T20:07:24.199Z",
-  "dirty": true
+  "sha": "2ae638f6e1b3f93f369a5e6ecaacd83be5c42bc6",
+  "shortSha": "2ae638f",
+  "subject": "ClinicBase: сбой одной ручки не должен отменять остальные данные",
+  "builtAt": "2026-10-23T20:08:19.078Z",
+  "dirty": false
 }
