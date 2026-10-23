@@ -59,6 +59,7 @@ import {
   apiSaveRecords,
   isApiUnavailable,
 } from "@/lib/clinicbase-api";
+import { describeServerFailure, serverProblemHint } from "@/lib/clinicbase-errors";
 import { DoctorUser, initialDoctors, loadDoctorUsers } from "@/lib/doctor-users";
 
 type Patient = {
@@ -826,21 +827,6 @@ const readTemplateFile = async (): Promise<TemplatePayload> => {
   }
   return payload;
 };
-
-/**
- * Понятная причина, почему не удалось сохранить справочник на сервер.
- *
- * ApiUnavailableError несёт английское служебное сообщение («ClinicBase API is
- * unavailable»), и врачу оно не говорит ничего. А причина у него на практике
- * одна: на хостинге лежит старый api/index.php без нужного обработчика, либо
- * сервер не отвечает вовсе. Так и пишем.
- */
-const describeServerFailure = (error: unknown) =>
-  isApiUnavailable(error)
-    ? "сервер не ответил или на нём старая версия api/index.php"
-    : error instanceof Error
-      ? error.message
-      : String(error);
 
 /**
  * Тексты для панели подсказок: сначала свои записи, затем общие, без повторов.
@@ -3063,7 +3049,15 @@ const DoctorDatabase = () => {
       saveAuthSession(session);
     } catch (error) {
       if (!isApiUnavailable(error)) {
-        toast({ title: "Вход не выполнен", description: "Проверьте логин и пароль врача." });
+        // Сервер ответил — значит дело не в связи. Но и не обязательно в
+        // пароле: если он не настроен или не видит базу, сообщение «проверьте
+        // логин и пароль» уводит в сторону. Говорим то, что знаем.
+        const hint = serverProblemHint(error);
+        toast({
+          title: hint ? "Сервер не готов" : "Вход не выполнен",
+          description: hint || "Проверьте логин и пароль врача.",
+          ...(hint ? { variant: "destructive" as const } : {}),
+        });
         return;
       }
 
@@ -3254,7 +3248,13 @@ const DoctorDatabase = () => {
       return;
     } catch (error) {
       if (!isApiUnavailable(error)) {
-        toast({ title: "Сервер недоступен", description: "Данные сохранены локально. Повторите сохранение позже." });
+        const hint = serverProblemHint(error);
+        toast({
+          title: "Сервер недоступен",
+          description: hint
+            ? `Данные сохранены локально. ${hint}`
+            : "Данные сохранены локально. Повторите сохранение позже.",
+        });
         return;
       }
     }

@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { saveAuthSession } from "@/lib/auth-session";
 import { apiLogin, isApiUnavailable } from "@/lib/clinicbase-api";
+import { serverProblemHint } from "@/lib/clinicbase-errors";
 import { loadDoctorUsers } from "@/lib/doctor-users";
 
 const Login = () => {
@@ -24,7 +25,16 @@ const Login = () => {
       return;
     } catch (error) {
       if (!isApiUnavailable(error)) {
-        toast({ title: "Вход не выполнен", description: "Проверьте логин и пароль." });
+        // Сервер ответил — но не обязательно «неверный пароль». Если он не
+        // настроен или не видит базу, прежнее сообщение уводило в сторону:
+        // 23.10.2026 владелец искал конфликт с базой, а не хватало
+        // api/config.php. Говорим то, что знаем.
+        const hint = serverProblemHint(error);
+        toast({
+          title: hint ? "Сервер не готов" : "Вход не выполнен",
+          description: hint || "Проверьте логин и пароль.",
+          ...(hint ? { variant: "destructive" as const } : {}),
+        });
         return;
       }
 

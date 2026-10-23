@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "a6a344f9429614f1100eac28b3d16664949b50a6",
-  "shortSha": "a6a344f",
-  "subject": "build-ib-template: падать, если поле из SECTION_MAP отсутствует в форме",
-  "builtAt": "2026-10-23T18:57:05.004Z",
-  "dirty": false
+  "sha": "09f3319dce5f18ca54ab5d889c1bf22c13bf6425",
+  "shortSha": "09f3319",
+  "subject": "Пакет ClinicBase: перештампован под a6a344f",
+  "builtAt": "2026-10-23T19:54:14.478Z",
+  "dirty": true
 }
