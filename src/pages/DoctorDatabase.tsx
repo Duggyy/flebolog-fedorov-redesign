@@ -9,6 +9,8 @@ import {
   Copy,
   Download,
   FileText,
+  Info,
+  Pencil,
   Plus,
   Printer,
   Save,
@@ -21,6 +23,12 @@ import {
 } from "lucide-react";
 import ClinicBaseHeader from "@/components/ClinicBaseHeader";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -961,20 +969,21 @@ const formatDateRu = (value: string) => {
 };
 
 /**
- * Шапка правой области. Одна на два режима, иначе подпись режима и
- * переключатель пришлось бы дублировать, и они разъехались бы.
+ * Шапка правой области. Одна на два режима, иначе подпись режима пришлось бы
+ * дублировать, и они разъехались бы.
+ *
+ * Переключателя режима здесь больше нет: «Информация» переехала в верхнюю
+ * панель, туда же, где «Справочники» и «Приём». Причина простая — в 300 px
+ * панели кнопка отъедала место у заголовка, а искать переключатель удобнее
+ * там же, где остальные действия экрана.
  */
 const PanelHeader = ({
   title,
   count,
-  mode,
-  onToggleMode,
   onReset,
 }: {
   title: string;
   count?: number;
-  mode: PanelMode;
-  onToggleMode: () => void;
   onReset?: () => void;
 }) => (
   <div className="flex items-center gap-1 border-b border-[#c6ced9] bg-[#dfe4ea] px-1.5 py-1">
@@ -984,22 +993,6 @@ const PanelHeader = ({
         {count}
       </span>
     ) : null}
-    <button
-      type="button"
-      onClick={onToggleMode}
-      aria-pressed={mode === "schedule"}
-      data-testid="panel-mode-toggle"
-      title={mode === "schedule" ? "Показать справочники" : "Показать график приёмов"}
-      className={`rounded-sm border px-1 text-[10px] leading-[15px] transition-colors ${
-        count === undefined ? "ml-auto" : ""
-      } ${
-        mode === "schedule"
-          ? "border-[#185fa5] bg-[#e6f1fb] text-[#0c447c]"
-          : "border-[#c6ced9] bg-white text-[#5a6675] hover:text-foreground"
-      }`}
-    >
-      Информация
-    </button>
     {onReset ? (
       <button
         type="button"
@@ -1027,7 +1020,6 @@ const SchedulePanel = ({
   onSelect,
   onOpen,
   onCopyProtocol,
-  onToggleMode,
 }: {
   visits: Visit[];
   doctorId: string;
@@ -1035,7 +1027,6 @@ const SchedulePanel = ({
   onSelect: (visitId: string) => void;
   onOpen: (visitId: string) => void;
   onCopyProtocol: (visitId: string) => void;
-  onToggleMode: () => void;
 }) => {
   const selected = visits.find((visit) => visit.id === selectedVisitId) ?? null;
   const canCopy = Boolean(selected) && selected?.doctorId === doctorId;
@@ -1045,7 +1036,7 @@ const SchedulePanel = ({
       data-testid="schedule-panel"
       className="flex min-w-0 flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]"
     >
-      <PanelHeader title="График" mode="schedule" onToggleMode={onToggleMode} />
+      <PanelHeader title="График" count={visits.length} />
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         {/* Четыре колонки в 300 px не читаются: «10.06.2026» обрезается до
@@ -1137,7 +1128,6 @@ const SuggestionPanel = ({
   onDelete,
   onPick,
   onClose,
-  onToggleMode,
   onOpenDictionaries,
 }: {
   label: string;
@@ -1148,7 +1138,6 @@ const SuggestionPanel = ({
   onDelete: (value: string) => void;
   onPick: (value: string) => void;
   onClose: () => void;
-  onToggleMode: () => void;
   onOpenDictionaries: () => void;
 }) => {
   const [filter, setFilter] = useState("");
@@ -1167,13 +1156,7 @@ const SuggestionPanel = ({
       data-testid="suggestion-panel"
       className="flex min-w-0 flex-col rounded-sm border border-[#c6ced9] bg-[#f4f6f9] xl:sticky xl:top-1.5 xl:h-[calc(100vh-4.75rem)]"
     >
-      <PanelHeader
-        title="Справочники"
-        count={visible.length}
-        mode="dictionary"
-        onToggleMode={onToggleMode}
-        onReset={onClose}
-      />
+      <PanelHeader title="Справочники" count={visible.length} onReset={onClose} />
 
       {label ? (
         <>
@@ -1640,52 +1623,85 @@ const PatientPicker = ({
  * диалог. Radix рисует содержимое в портале, и при печати браузеры ведут себя
  * по-разному — от «напечатался пустой лист» до «напечатался весь интерфейс».
  */
-const printDictionaries = (entries: DictionaryEntry[], scope: DictionaryScope, scopeTitle: string) => {
-  const bySection = new Map<string, DictionaryEntry[]>();
-  entries
-    .filter((entry) => entry.scope === scope)
-    .forEach((entry) => {
+const printDictionaries = (
+  entries: DictionaryEntry[],
+  scope: DictionaryScope | "all",
+  scopeTitle: string,
+) => {
+  // Раздел → таблица записей. Отдельной функцией, потому что печать «всего»
+  // склеивает два набора, и без неё разметку пришлось бы дублировать.
+  const buildSections = (subset: DictionaryEntry[], heading: "h2" | "h3") => {
+    const bySection = new Map<string, DictionaryEntry[]>();
+    subset.forEach((entry) => {
       const bucket = bySection.get(entry.section) ?? [];
       bucket.push(entry);
       bySection.set(entry.section, bucket);
     });
 
-  const sectionsHtml = Array.from(bySection.entries())
-    .map(([section, items]) => {
-      const rows = [...items]
-        .sort((a, b) => a.order - b.order || a.short.localeCompare(b.short, "ru"))
-        .map((entry) => {
-          const color = entry.color ? ` style="color:${entry.color}"` : "";
-          // Полный текст печатаем, только если он отличается от краткого:
-          // иначе каждая строка задвоится.
-          const full =
-            entry.full && entry.full !== entry.short
-              ? `<div class="full">${escapeHtml(entry.full).replace(/\n/g, "<br>")}</div>`
-              : "";
-          return `<tr><td${color}>${escapeHtml(entry.short)}${full}</td></tr>`;
-        })
-        .join("");
-      return `<h2>${escapeHtml(section)}</h2><table>${rows}</table>`;
-    })
-    .join("");
+    return Array.from(bySection.entries())
+      .map(([section, items]) => {
+        const rows = [...items]
+          .sort((a, b) => a.order - b.order || a.short.localeCompare(b.short, "ru"))
+          .map((entry) => {
+            const color = entry.color ? ` style="color:${entry.color}"` : "";
+            // Полный текст печатаем, только если он отличается от краткого:
+            // иначе каждая строка задвоится.
+            const full =
+              entry.full && entry.full !== entry.short
+                ? `<div class="full">${escapeHtml(entry.full).replace(/\n/g, "<br>")}</div>`
+                : "";
+            return `<tr><td${color}>${escapeHtml(entry.short)}${full}</td></tr>`;
+          })
+          .join("");
+        return `<${heading}>${escapeHtml(section)}</${heading}><table>${rows}</table>`;
+      })
+      .join("");
+  };
 
+  // «Всё» — это два отдельных блока, а не один общий список: общий справочник
+  // наполняется из шаблона, личный пишет врач, и в одной таблице они путались
+  // бы. Пустой блок не печатаем — иначе на бумаге останется голый заголовок.
+  const sectionsHtml =
+    scope === "all"
+      ? (
+          [
+            ["global", "Общие"],
+            ["personal", "Личные"],
+          ] as Array<[DictionaryScope, string]>
+        )
+          .map(([value, title]) => {
+            const body = buildSections(
+              entries.filter((entry) => entry.scope === value),
+              "h3",
+            );
+            return body ? `<h2 class="scope">${escapeHtml(title)}</h2>${body}` : "";
+          })
+          .join("")
+      : buildSections(
+          entries.filter((entry) => entry.scope === scope),
+          "h2",
+        );
+
+  const title = scope === "all" ? "Справочники" : `Справочники — ${scopeTitle}`;
   const html = `<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <title>Справочники — ${escapeHtml(scopeTitle)}</title>
+  <title>${escapeHtml(title)}</title>
   <style>
     body { font-family: "Times New Roman", serif; font-size: 12pt; line-height: 1.3; margin: 18mm; }
     h1 { font-size: 16pt; margin: 0 0 4mm; }
     h2 { font-size: 13pt; margin: 6mm 0 2mm; border-bottom: 1px solid #999; }
+    h2.scope { font-size: 14pt; margin-top: 9mm; border-bottom: none; }
+    h3 { font-size: 12pt; margin: 4mm 0 1mm; }
     table { width: 100%; border-collapse: collapse; }
     td { padding: 1mm 0; vertical-align: top; }
     .full { font-size: 10pt; color: #444; }
-    @media print { h2 { break-after: avoid; } }
+    @media print { h2, h3 { break-after: avoid; } }
   </style>
 </head>
 <body>
-  <h1>Справочники — ${escapeHtml(scopeTitle)}</h1>
+  <h1>${escapeHtml(title)}</h1>
   ${sectionsHtml || "<p>Записей нет.</p>"}
 </body>
 </html>`;
@@ -1729,7 +1745,7 @@ const DictionariesDialog = ({
   onDelete: (entry: DictionaryEntry) => void;
   onImport: (section: string, items: Array<{ short: string; full: string }>) => Promise<number>;
 }) => {
-  const [scope, setScope] = useState<DictionaryScope>("personal");
+  const [scope, setScope] = useState<DictionaryScope>("global");
   const [section, setSection] = useState(initialSection);
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState<DictionaryEntry | null>(null);
@@ -1738,11 +1754,13 @@ const DictionariesDialog = ({
 
   useEffect(() => {
     if (!open) return;
-    // Если личных записей нет вовсе, открываем «Общие»: новый врач при первом
-    // заходе иначе увидит пустой экран и решит, что справочников нет.
-    const targetScope: DictionaryScope = entries.some((entry) => entry.scope === "personal")
-      ? "personal"
-      : "global";
+    // Открываем «Общие»: это справочник клиники, его наполняют из шаблона
+    // истории болезни, и именно в нём врач ищет готовые формулировки. Но если
+    // общий пуст (шаблон ещё не загружен), показываем «Личные» — пустой экран
+    // при первом заходе выглядел бы как «справочников нет вовсе».
+    const targetScope: DictionaryScope = entries.some((entry) => entry.scope === "global")
+      ? "global"
+      : "personal";
     const hasInSection = entries.some(
       (entry) => entry.section === initialSection && entry.scope === targetScope,
     );
@@ -1849,15 +1867,16 @@ const DictionariesDialog = ({
           <DialogTitle className="text-base">Справочники</DialogTitle>
           <DialogDescription className="text-[11px]">
             Краткое имя вставляется в протокол, полный текст раскрывается в подсказке и идёт
-            на печать. Цвет помогает не перепутать записи.
+            на печать. Цвет помогает не перепутать записи. «Общие» — справочник клиники,
+            «Личные» — ваши собственные записи.
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="flex rounded-sm border border-[#c6ced9] p-0.5" role="tablist">
             {([
-              ["personal", "Мои"],
               ["global", "Общие"],
+              ["personal", "Личные"],
             ] as Array<[DictionaryScope, string]>).map(([value, label]) => (
               <button
                 key={value}
@@ -1895,8 +1914,8 @@ const DictionariesDialog = ({
           </div>
           <p className="text-[10px] leading-tight text-muted-foreground">
             {scope === "global"
-              ? "Изменения в общем справочнике видны всем врачам."
-              : "Личный справочник видите только вы."}
+              ? "Общий справочник клиники: наполняется из шаблона, изменения видны всем врачам."
+              : "Личные записи видите только вы."}
           </p>
           <div className="ml-auto flex flex-wrap gap-1.5">
             <Button
@@ -1918,7 +1937,7 @@ const DictionariesDialog = ({
                 const printed = printDictionaries(
                   entries,
                   scope,
-                  scope === "global" ? "общие" : "мои",
+                  scope === "global" ? "общие" : "личные",
                 );
                 if (!printed) {
                   window.alert("Браузер заблокировал окно печати. Разрешите всплывающие окна.");
@@ -3163,15 +3182,67 @@ const DoctorDatabase = () => {
           />
 
           <div className="ml-auto flex flex-wrap gap-1.5">
+            {/* «Справочники» — не одна кнопка, а меню, как в прототипе:
+                правка справочника и его печать это два разных действия, и
+                вешать их на одну кнопку значило бы угадывать, какое нужно. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-[11px]"
+                  data-testid="dictionaries-button"
+                >
+                  <BookOpen className="mr-1 h-3 w-3" />
+                  Справочники
+                  <ChevronDown className="ml-1 h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-60">
+                <DropdownMenuItem
+                  data-testid="dictionary-menu-edit"
+                  onSelect={() => openDictionaries()}
+                  className="text-[11px]"
+                >
+                  <Pencil className="mr-2 h-3.5 w-3.5" />
+                  Редактирование справочников
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  data-testid="dictionary-menu-print"
+                  onSelect={() => {
+                    // Печатаем оба набора сразу: из меню врач просит «весь
+                    // справочник», а не конкретную вкладку, которую он не
+                    // выбирал.
+                    const printed = printDictionaries(dictionaryEntries, "all", "все");
+                    if (!printed) {
+                      window.alert("Браузер заблокировал окно печати. Разрешите всплывающие окна.");
+                    }
+                  }}
+                  className="text-[11px]"
+                >
+                  <Printer className="mr-2 h-3.5 w-3.5" />
+                  Печать
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* Переключатель правой области. Раньше жил в шапке панели и
+                отъедал место у заголовка; здесь он на виду вместе с
+                остальными действиями экрана. */}
             <Button
               variant="outline"
               size="sm"
-              onClick={() => openDictionaries()}
-              className="h-6 px-2 text-[11px]"
-              data-testid="dictionaries-button"
+              onClick={() => setPanelMode(panelMode === "schedule" ? "dictionary" : "schedule")}
+              aria-pressed={panelMode === "schedule"}
+              data-testid="panel-mode-toggle"
+              title={panelMode === "schedule" ? "Показать справочники" : "Показать график приёмов"}
+              className={`h-6 px-2 text-[11px] ${
+                panelMode === "schedule"
+                  ? "border-[#185fa5] bg-[#e6f1fb] text-[#0c447c] hover:bg-[#d7e9fa] hover:text-[#0c447c]"
+                  : ""
+              }`}
             >
-              <BookOpen className="mr-1 h-3 w-3" />
-              Справочники
+              <Info className="mr-1 h-3 w-3" />
+              Информация
             </Button>
             <Button variant="outline" size="sm" onClick={addPatient} className="h-6 px-2 text-[11px]">
               <Plus className="mr-1 h-3 w-3" />
@@ -3379,8 +3450,9 @@ const DoctorDatabase = () => {
           <PanelResizer width={panelWidthPx} onChange={setPanelWidth} />
 
           {/* Панель рендерится всегда, но в одном из двух режимов: справочники
-              или график. Переключает врач кнопкой «Информация», а не фокус:
-              иначе форма дёргалась бы на каждом клике в поле. */}
+              или график. Переключает врач кнопкой «Информация» в верхней
+              панели, а не фокус: иначе форма дёргалась бы на каждом клике
+              в поле. */}
           {panelMode === "schedule" ? (
             <SchedulePanel
               visits={patientVisits}
@@ -3389,7 +3461,6 @@ const DoctorDatabase = () => {
               onSelect={setScheduleSelectionId}
               onOpen={(visitId) => setSelectedVisitId(visitId)}
               onCopyProtocol={copyProtocolFromVisit}
-              onToggleMode={() => setPanelMode("dictionary")}
             />
           ) : (
             <SuggestionPanel
@@ -3401,7 +3472,6 @@ const DoctorDatabase = () => {
               onDelete={deleteActiveSuggestion}
               onPick={(value) => activeSuggestionTarget?.insert(value)}
               onClose={() => setActiveSuggestionTarget(null)}
-              onToggleMode={() => setPanelMode("schedule")}
               onOpenDictionaries={() => openDictionaries()}
             />
           )}
