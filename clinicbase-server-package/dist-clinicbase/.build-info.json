@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "38ddc4e1a44d07c325f0090d6a40838ff70db86f",
-  "shortSha": "38ddc4e",
-  "subject": "Пакет ClinicBase: перештампован под 20d57f8",
-  "builtAt": "2026-10-23T18:52:05.362Z",
-  "dirty": true
+  "sha": "1125f4b7c3058ab2dcd34712c7126ae53317173b",
+  "shortSha": "1125f4b",
+  "subject": "ClinicBase: загрузка шаблона истории болезни в «Общие»",
+  "builtAt": "2026-10-23T18:53:04.331Z",
+  "dirty": false
 }
