@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "2ae638f6e1b3f93f369a5e6ecaacd83be5c42bc6",
-  "shortSha": "2ae638f",
-  "subject": "ClinicBase: сбой одной ручки не должен отменять остальные данные",
-  "builtAt": "2026-10-23T20:08:19.078Z",
+  "sha": "4654d8c3e6a63fb75ca72b8a028cda5c9d250d3c",
+  "shortSha": "4654d8c",
+  "subject": "Миграции справочников: устойчивый шаг с индексом и один файл для импорта",
+  "builtAt": "2026-10-23T20:30:30.674Z",
   "dirty": false
 }
