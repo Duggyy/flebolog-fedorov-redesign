@@ -65,6 +65,7 @@ try {
         'dictionary_save' => handle_dictionary_save($pdo),
         'dictionary_delete' => handle_dictionary_delete($pdo),
         'dictionaries_import' => handle_dictionaries_import($pdo),
+        'dictionaries_replace' => handle_dictionaries_replace($pdo),
         default => respond(404, ['error' => 'unknown_action']),
     };
 } catch (Throwable $error) {
@@ -433,7 +434,10 @@ function normalize_dictionary_entry(mixed $entry): ?array
     return [
         'id' => mb_substr($id, 0, 64),
         'section' => mb_substr($section, 0, 180),
-        'short' => mb_substr($short, 0, 500),
+        // 2000, а не 500: в шаблоне истории болезни есть готовые назначения
+        // длиной под 650 знаков, и прежний предел молча срезал бы хвост
+        // рецепта — самая дорогая из возможных потерь.
+        'short' => mb_substr($short, 0, 2000),
         'full' => (string)($entry['full'] ?? ''),
         'color' => $color,
         'parentId' => mb_substr(trim((string)($entry['parentId'] ?? '')), 0, 64),
@@ -601,6 +605,87 @@ function handle_dictionaries_import(PDO $pdo): never
     $pdo->commit();
 
     handle_dictionaries($pdo);
+}
+
+/**
+ * Полная замена набора в одной транзакции — загрузка шаблона истории болезни
+ * и её отмена.
+ *
+ * Не то же самое, что `dictionaries_import`: там дописывают строки из буфера
+ * и id генерирует сервер. Здесь клиент присылает готовый набор с устойчивыми
+ * id, а прежние общие записи должны исчезнуть целиком. Без транзакции на
+ * полпути получилась бы смесь двух шаблонов — худшее из возможных состояний.
+ *
+ * Отмена загрузки — тот же запрос с прежним набором, поэтому отдельного
+ * «undo» на сервере не нужно.
+ */
+function handle_dictionaries_replace(PDO $pdo): never
+{
+    require_logged_in();
+    $payload = read_json();
+    $scope = ($payload['scope'] ?? 'global') === 'personal' ? 'personal' : 'global';
+    if ($scope !== 'global') {
+        // Личные записи принадлежат конкретному врачу, и «заменить все личные
+        // одним запросом» означало бы стереть чужие. Массовая замена — только
+        // для общих.
+        respond(422, ['error' => 'only_global_replaceable']);
+    }
+
+    $rawEntries = $payload['entries'] ?? [];
+    if (!is_array($rawEntries)) {
+        respond(422, ['error' => 'invalid_entries']);
+    }
+
+    $pdo->beginTransaction();
+    try {
+        $pdo->exec('DELETE FROM dictionary_entries WHERE doctor_id IS NULL');
+
+        // ON DUPLICATE KEY UPDATE, а не голый INSERT: если в присланном наборе
+        // случайно окажутся два одинаковых id, транзакция целиком упала бы на
+        // дубликате ключа, и сервер остался бы без шаблона, а браузер — с ним.
+        $statement = $pdo->prepare(
+            'INSERT INTO dictionary_entries
+                (id, doctor_id, section, short_text, full_text, color, parent_id, sort_order)
+             VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE
+                section = VALUES(section),
+                short_text = VALUES(short_text),
+                full_text = VALUES(full_text),
+                color = VALUES(color),
+                parent_id = VALUES(parent_id),
+                sort_order = VALUES(sort_order)'
+        );
+        $saved = 0;
+        foreach ($rawEntries as $raw) {
+            if (!is_array($raw)) {
+                continue;
+            }
+            $entry = normalize_dictionary_entry(array_merge($raw, ['scope' => 'global']));
+            if ($entry === null) {
+                continue;
+            }
+            // id приходит от клиента: он же лежит в localStorage, и при отмене
+            // восстановятся ровно те же строки, а не новые с другими id.
+            $statement->execute([
+                $entry['id'],
+                $entry['section'],
+                $entry['short'],
+                null_if_empty($entry['full']),
+                null_if_empty($entry['color']),
+                null_if_empty($entry['parentId']),
+                $entry['order'],
+            ]);
+            $saved++;
+        }
+        $pdo->commit();
+    } catch (Throwable $error) {
+        // Откат обязателен: иначе после неудачной загрузки на сервере
+        // остались бы удалённые общие записи и ни одной новой.
+        $pdo->rollBack();
+        respond(500, ['error' => 'replace_failed', 'message' => $error->getMessage()]);
+    }
+
+    respond(200, ['ok' => true, 'saved' => $saved]);
 }
 
 function normalize_date(mixed $value): string

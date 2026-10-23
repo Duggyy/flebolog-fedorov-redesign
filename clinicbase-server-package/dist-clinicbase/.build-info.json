@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "20d57f8328f4ae913b4ef9da64d9f00be2ef1d1e",
-  "shortSha": "20d57f8",
-  "subject": "ClinicBase: вкладки «Общие» и «Личные» в самой панели справочников",
-  "builtAt": "2026-10-23T17:16:47.493Z",
-  "dirty": false
+  "sha": "38ddc4e1a44d07c325f0090d6a40838ff70db86f",
+  "shortSha": "38ddc4e",
+  "subject": "Пакет ClinicBase: перештампован под 20d57f8",
+  "builtAt": "2026-10-23T18:52:05.362Z",
+  "dirty": true
 }

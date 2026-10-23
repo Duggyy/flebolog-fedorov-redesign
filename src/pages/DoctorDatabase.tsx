@@ -8,6 +8,7 @@ import {
   ChevronRight,
   Copy,
   Download,
+  FileDown,
   FileText,
   Info,
   Pencil,
@@ -18,6 +19,7 @@ import {
   Settings,
   Stethoscope,
   Trash2,
+  Undo2,
   X,
   UserRound,
 } from "lucide-react";
@@ -27,6 +29,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
@@ -51,6 +54,7 @@ import {
   apiGetSession,
   apiImportDictionaryEntries,
   apiLogin,
+  apiReplaceGlobalDictionaries,
   apiSaveDictionaryEntry,
   apiSaveRecords,
   isApiUnavailable,
@@ -770,6 +774,73 @@ const loadDictionaries = (): DictionaryEntry[] => {
 const saveDictionaries = (entries: DictionaryEntry[]) => {
   localStorage.setItem(dictionariesStorageKey, JSON.stringify(entries));
 };
+
+/**
+ * Копия справочников до загрузки шаблона.
+ *
+ * Нужна ровно для одного — отменить загрузку, если она легла не так. Пятьсот
+ * с лишним записей руками не откатишь, а «попробуем и посмотрим» без отмены
+ * было бы не предложением, а ловушкой.
+ */
+type TemplateBackup = {
+  at: string;
+  version: string;
+  entries: DictionaryEntry[];
+};
+
+/** Разобранный файл шаблона, который лежит рядом с приложением. */
+type TemplatePayload = {
+  version: string;
+  source: string;
+  sections: Array<{ title: string; entries: string[] }>;
+  skipped: Array<{ title: string; count: number; entries: string[] }>;
+};
+
+const templateBackupStorageKey = "clinicbase-template-backup-v1";
+
+const loadTemplateBackup = (): TemplateBackup | null => {
+  const raw = localStorage.getItem(templateBackupStorageKey);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as TemplateBackup;
+    return Array.isArray(parsed.entries) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Читает шаблон. Лежит в public-clinicbase/data и уезжает вместе со сборкой,
+ * поэтому на сервере клиники отдельная загрузка файла не нужна.
+ */
+const readTemplateFile = async (): Promise<TemplatePayload> => {
+  const response = await fetch(`${import.meta.env.BASE_URL}data/dictionary-template.json`, {
+    cache: "no-cache",
+  });
+  if (!response.ok) {
+    throw new Error(`файл шаблона не найден (HTTP ${response.status})`);
+  }
+  const payload = (await response.json()) as TemplatePayload;
+  if (!Array.isArray(payload.sections)) {
+    throw new Error("файл шаблона повреждён");
+  }
+  return payload;
+};
+
+/**
+ * Понятная причина, почему не удалось сохранить справочник на сервер.
+ *
+ * ApiUnavailableError несёт английское служебное сообщение («ClinicBase API is
+ * unavailable»), и врачу оно не говорит ничего. А причина у него на практике
+ * одна: на хостинге лежит старый api/index.php без нужного обработчика, либо
+ * сервер не отвечает вовсе. Так и пишем.
+ */
+const describeServerFailure = (error: unknown) =>
+  isApiUnavailable(error)
+    ? "сервер не ответил или на нём старая версия api/index.php"
+    : error instanceof Error
+      ? error.message
+      : String(error);
 
 /**
  * Тексты для панели подсказок: сначала свои записи, затем общие, без повторов.
@@ -2311,6 +2382,16 @@ const DoctorDatabase = () => {
   const [dictionaryEntries, setDictionaryEntries] = useState(loadDictionaries);
   const [dictionariesOpen, setDictionariesOpen] = useState(false);
   const [dictionarySection, setDictionarySection] = useState("");
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+  const [templateInfo, setTemplateInfo] = useState<{
+    version: string;
+    sections: number;
+    entries: number;
+    skipped: number;
+  } | null>(null);
+  const [templateBusy, setTemplateBusy] = useState(false);
+  const [templateError, setTemplateError] = useState("");
+  const [templateBackup, setTemplateBackup] = useState<TemplateBackup | null>(loadTemplateBackup);
   const recordsRef = useRef(records);
   const dictionaryRef = useRef(dictionaryEntries);
   const pendingActionRef = useRef<((sourceRecords: MedicalRecords) => void) | null>(null);
@@ -2624,12 +2705,156 @@ const DoctorDatabase = () => {
    */
   const openDictionaries = (preferredSection: string = activeSection) => {
     const preferred = preferredSection || dictionarySections[0] || "";
-    const hasPreferred = dictionaryEntries.some(
-      (entry) => entry.section === preferred && entry.scope === "personal",
-    );
-    const fallback = dictionaryEntries.find((entry) => entry.scope === "personal")?.section;
+    // Раньше смотрели только на личные записи: общих почти не было. Теперь
+    // основной набор — «Общие» (шаблон клиники), и раздел с записями любого
+    // набора лучше пустого.
+    const hasPreferred = dictionaryEntries.some((entry) => entry.section === preferred);
+    const fallback = dictionaryEntries[0]?.section;
     setDictionarySection(hasPreferred ? preferred : fallback ?? preferred);
     setDictionariesOpen(true);
+  };
+
+  /** Открыть подтверждение загрузки и заодно показать, сколько там записей. */
+  const openTemplateDialog = async () => {
+    setTemplateDialogOpen(true);
+    setTemplateError("");
+    if (templateInfo) return;
+    setTemplateBusy(true);
+    try {
+      const payload = await readTemplateFile();
+      setTemplateInfo({
+        version: payload.version,
+        sections: payload.sections.length,
+        entries: payload.sections.reduce((sum, section) => sum + section.entries.length, 0),
+        skipped: payload.skipped.reduce((sum, section) => sum + section.count, 0),
+      });
+    } catch (error) {
+      setTemplateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+
+  /**
+   * Загрузка шаблона истории болезни в «Общие».
+   *
+   * Заменяет общие записи целиком, а не дописывает: «Общие» — это и есть
+   * справочник клиники из шаблона. Личные не трогаем. Перед записью кладём
+   * копию прежнего состояния — она и есть отмена.
+   */
+  const applyTemplate = async () => {
+    setTemplateBusy(true);
+    setTemplateError("");
+    try {
+      const payload = await readTemplateFile();
+      const imported: DictionaryEntry[] = [];
+      payload.sections.forEach((section) => {
+        section.entries.forEach((text, index) => {
+          imported.push({
+            // id устойчивый: повторная загрузка того же шаблона не создаст
+            // вторую копию записи, а отмена вернёт те же идентификаторы.
+            id: stableId("global", section.title, text),
+            section: section.title,
+            short: text,
+            full: "",
+            color: "",
+            parentId: "",
+            order: index,
+            scope: "global",
+          });
+        });
+      });
+      if (imported.length === 0) {
+        setTemplateError("в файле шаблона нет записей");
+        return;
+      }
+
+      const current = dictionaryRef.current;
+      const backup: TemplateBackup = {
+        at: new Date().toISOString(),
+        version: payload.version,
+        entries: current,
+      };
+      localStorage.setItem(templateBackupStorageKey, JSON.stringify(backup));
+      setTemplateBackup(backup);
+
+      mutateDictionaries(() => [
+        ...current.filter((entry) => entry.scope === "personal"),
+        ...imported,
+      ]);
+
+      // Сохранение на сервер ждём и проверяем. Раньше здесь стояло
+      // `.catch(() => undefined)`, и это было тихой ложью: если на хостинге
+      // остался старый api/index.php без обработчика dictionaries_replace,
+      // запрос падал с 404, а врач всё равно видел «Шаблон загружен».
+      // Записи жили в этом браузере и пропадали при входе с другого
+      // компьютера. Пятьсот записей — не то, что можно потерять молча.
+      let savedOnServer = false;
+      let saveError = "";
+      try {
+        await apiReplaceGlobalDictionaries(imported);
+        savedOnServer = true;
+      } catch (error) {
+        saveError = describeServerFailure(error);
+      }
+
+      setTemplateDialogOpen(false);
+      if (savedOnServer) {
+        toast({
+          title: "Шаблон загружен",
+          description: `${imported.length} записей в «Общие». Отменить — в меню «Справочники».`,
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Шаблон загружен только в этом браузере",
+          description: `На сервер сохранить не удалось: ${saveError}. Записи видны сейчас, но пропадут при входе с другого компьютера. Проверьте, что на хостинг выгружен новый api/index.php.`,
+        });
+      }
+    } catch (error) {
+      setTemplateError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setTemplateBusy(false);
+    }
+  };
+
+  /**
+   * Возврат к состоянию до загрузки — и в браузере, и на сервере.
+   *
+   * Копию прежнего состояния убираем только после того, как сервер подтвердил
+   * откат. Если сервер не ответил, отмена остаётся в меню: иначе получилось бы
+   * «в браузере откатили, на сервере шаблон остался», и повторить попытку было
+   * бы уже нечем.
+   */
+  const undoTemplate = async () => {
+    if (!templateBackup) return;
+    const restored = templateBackup.entries;
+    mutateDictionaries(() => restored);
+
+    let revertedOnServer = false;
+    let revertError = "";
+    try {
+      await apiReplaceGlobalDictionaries(restored.filter((entry) => entry.scope === "global"));
+      revertedOnServer = true;
+    } catch (error) {
+      revertError = describeServerFailure(error);
+    }
+
+    if (revertedOnServer) {
+      localStorage.removeItem(templateBackupStorageKey);
+      setTemplateBackup(null);
+      toast({
+        title: "Загрузка отменена",
+        description: "Справочники вернулись к состоянию до загрузки шаблона.",
+      });
+      return;
+    }
+
+    toast({
+      variant: "destructive",
+      title: "Отменено только в этом браузере",
+      description: `На сервере шаблон остался: ${revertError}. Пункт «Отменить загрузку шаблона» остался в меню — попробуйте ещё раз.`,
+    });
   };
 
   const activateSuggestionTarget = (target: SuggestionTarget) => {
@@ -3321,6 +3546,27 @@ const DoctorDatabase = () => {
                   <Printer className="mr-2 h-3.5 w-3.5" />
                   Печать
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  data-testid="dictionary-menu-template"
+                  onSelect={() => {
+                    void openTemplateDialog();
+                  }}
+                  className="text-[11px]"
+                >
+                  <FileDown className="mr-2 h-3.5 w-3.5" />
+                  Загрузить шаблон ИБ
+                </DropdownMenuItem>
+                {templateBackup ? (
+                  <DropdownMenuItem
+                    data-testid="dictionary-menu-undo-template"
+                    onSelect={undoTemplate}
+                    className="text-[11px]"
+                  >
+                    <Undo2 className="mr-2 h-3.5 w-3.5" />
+                    Отменить загрузку шаблона
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
             {/* Переключатель правой области. Раньше жил в шапке панели и
@@ -3587,6 +3833,64 @@ const DoctorDatabase = () => {
         onDelete={deleteDictionaryEntry}
         onImport={importDictionaryEntries}
       />
+
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="max-w-[480px]" data-testid="template-dialog">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-base">Загрузить шаблон ИБ</DialogTitle>
+            <DialogDescription className="text-[11px] leading-snug">
+              Записи из «Шаблон ИБ 2026_10» встанут в «Общие». Прежние общие записи
+              заменятся, личные останутся как были.
+            </DialogDescription>
+          </DialogHeader>
+
+          {templateError ? (
+            <p className="rounded-sm border border-destructive/40 bg-destructive/5 p-2 text-[11px] leading-snug text-destructive">
+              Не удалось прочитать шаблон: {templateError}
+            </p>
+          ) : templateInfo ? (
+            <div className="space-y-1 text-[11px] leading-snug">
+              <p>
+                <span className="font-semibold">{templateInfo.entries}</span> записей
+                в {templateInfo.sections} разделах.
+              </p>
+              {templateInfo.skipped > 0 ? (
+                <p className="text-muted-foreground">
+                  Ещё {templateInfo.skipped} записей не войдут: для них в форме нет полей
+                  (повод и случай обращения, перевязки, клинические данные, вид операции).
+                </p>
+              ) : null}
+              <p className="text-muted-foreground">
+                Если ляжет не так — отмена там же, в меню «Справочники».
+              </p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">Читаю шаблон…</p>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px]"
+              onClick={() => setTemplateDialogOpen(false)}
+            >
+              Отмена
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 text-[11px]"
+              data-testid="template-apply"
+              disabled={templateBusy || !templateInfo}
+              onClick={() => {
+                void applyTemplate();
+              }}
+            >
+              {templateBusy ? "Загружаю…" : "Загрузить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
         <DialogContent className="max-w-4xl">

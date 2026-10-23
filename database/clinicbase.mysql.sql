@@ -112,7 +112,7 @@ CREATE TABLE dictionary_entries (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
   doctor_id VARCHAR(64) NULL,
   section VARCHAR(180) NOT NULL,
-  short_text VARCHAR(500) NOT NULL,
+  short_text TEXT NOT NULL,
   full_text TEXT NULL,
   color VARCHAR(16) NULL,
   parent_id VARCHAR(64) NULL,

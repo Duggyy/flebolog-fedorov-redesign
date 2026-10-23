@@ -130,4 +130,21 @@ export const apiImportDictionaryEntries = async (
   return payload.entries;
 };
 
+/**
+ * Полная замена общих записей справочника — загрузка шаблона истории болезни.
+ *
+ * Один запрос вместо 530: по одной записи это была бы минута ожидания и
+ * половина шаблона на сервере, если связь оборвётся на середине. Сервер
+ * делает замену в транзакции, поэтому «половины» не бывает.
+ */
+export const apiReplaceGlobalDictionaries = async (
+  entries: DictionaryEntryPayload[],
+) => {
+  const payload = await post<{ ok: true; saved: number }>("dictionaries_replace", {
+    scope: "global",
+    entries,
+  });
+  return payload.saved;
+};
+
 export const isApiUnavailable = (error: unknown) => error instanceof ApiUnavailableError;
