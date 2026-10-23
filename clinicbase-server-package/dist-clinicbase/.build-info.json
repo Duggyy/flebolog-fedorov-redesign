@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "1125f4b7c3058ab2dcd34712c7126ae53317173b",
-  "shortSha": "1125f4b",
-  "subject": "ClinicBase: загрузка шаблона истории болезни в «Общие»",
-  "builtAt": "2026-10-23T18:53:04.331Z",
+  "sha": "661f98f0af77ce59893885773cd6ec64505ad524",
+  "shortSha": "661f98f",
+  "subject": "check:deploy: не предупреждать, когда после сборки менялся только штамп",
+  "builtAt": "2026-10-23T18:54:46.267Z",
   "dirty": false
 }
