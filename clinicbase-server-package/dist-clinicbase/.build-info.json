@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "4654d8c3e6a63fb75ca72b8a028cda5c9d250d3c",
-  "shortSha": "4654d8c",
-  "subject": "Миграции справочников: устойчивый шаг с индексом и один файл для импорта",
-  "builtAt": "2026-10-23T20:30:30.674Z",
+  "sha": "a01334a201d4ede07839bc3d1b5ab4a31f8088bf",
+  "shortSha": "a01334a",
+  "subject": "Справочники: расширять текст через VARCHAR(2000), а не TEXT",
+  "builtAt": "2026-10-23T20:42:27.220Z",
   "dirty": false
 }
