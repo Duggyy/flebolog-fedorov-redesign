@@ -14,6 +14,7 @@
     "photos:sync": "node scripts/sync-conference-photos.mjs",
     "check:deploy": "node scripts/predeploy-check.mjs",
     "check:live": "node scripts/check-live.mjs",
+    "verify:sql": "node scripts/verify-sql.mjs clinicbase-server-package/database/apply-dictionaries.sql",
     "audit:links": "node scripts/audit-links.mjs",
     "dist:clean": "node scripts/clean-dist.mjs",
     "build:clinicbase": "vite build --config vite.clinicbase.config.ts && node scripts/inline-clinicbase-css.mjs && mv dist-clinicbase/clinicbase.html dist-clinicbase/index.html && node scripts/clean-dist.mjs --dist dist-clinicbase && node scripts/stamp-build.mjs --dist dist-clinicbase --app clinicbase",

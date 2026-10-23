@@ -17,10 +17,13 @@
  *   4. api/index.php отвечает JSON, а не HTML (PHP работает).
  *   5. api/config.php существует: иначе API честно скажет, что не настроен.
  *   6. База доступна: `session` не возвращает database_connection_failed.
+ *   7. С флагом `--probe-width` — не обрезается ли длинный текст записи.
+ *      Проверка пишет пробную запись, читает её обратно и удаляет.
  *
  * Запуск:
  *   node scripts/check-live.mjs
  *   node scripts/check-live.mjs --url https://clinicbase.ru
+ *   node scripts/check-live.mjs --login fedorov --password 1234 --probe-width
  *
  * Код возврата 1, если есть хотя бы одна ошибка.
  */
@@ -209,6 +212,59 @@ if (login && password) {
         );
       } else {
         fail("справочники не читаются", dictionaries?.body?.error ?? "пустой ответ");
+      }
+
+      // 7. Предел длины текста записи. Проверяется записью и удалением пробной
+      //    строки, потому что иначе обрезку не видно никак: сервер отвечает
+      //    «ok» и молча хранит первые 500 знаков. Только по флагу --probe-width:
+      //    это запись в живую базу, по умолчанию её быть не должно.
+      if (args.includes("--probe-width")) {
+        const probeId = `check-live-${Date.now().toString(36)}`;
+        const long = "П".repeat(650);
+        const post = async (action, body) => {
+          const response = await fetch(`${BASE}/api/index.php?action=${action}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: cookie },
+            body: JSON.stringify(body),
+          }).catch(() => null);
+          if (!response) return null;
+          return { status: response.status, body: await response.json().catch(() => null) };
+        };
+
+        const saved = await post("dictionary_save", {
+          entry: {
+            id: probeId,
+            section: "Жалобы",
+            short: long,
+            full: "",
+            color: "",
+            parentId: "",
+            order: 999,
+            scope: "personal",
+          },
+        });
+
+        if (!saved?.body?.ok) {
+          fail("не удалось записать пробную запись", saved?.body?.error ?? "запрос не ушёл");
+        } else {
+          const list = await authed("dictionaries");
+          const probe = (list?.body?.entries ?? []).find((entry) => entry.id === probeId);
+          const read = probe ? String(probe.short ?? "").length : 0;
+          if (read >= long.length) {
+            ok("текст записи не обрезается", `${read} знаков записано и прочитано`);
+          } else {
+            fail(
+              "текст записи обрезается",
+              `записано ${long.length} знаков, прочитано ${read} — нужен файл database/migrations/2026-10-23-dictionary-short-text-long.sql (раздел 7)`,
+            );
+          }
+
+          await post("dictionary_delete", { id: probeId });
+          const after = await authed("dictionaries");
+          if ((after?.body?.entries ?? []).some((entry) => entry.id === probeId)) {
+            fail("пробная запись не удалилась", probeId);
+          }
+        }
       }
     }
   }
