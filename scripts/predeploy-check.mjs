@@ -77,8 +77,43 @@ if (!fs.existsSync(stampPath)) {
   const stamp = JSON.parse(fs.readFileSync(stampPath, "utf8"));
   const built = new Date(stamp.builtAt);
   const when = `${built.toLocaleString("ru-RU")}`;
+
+  /**
+   * Штамп всегда отстаёт на один коммит — и это не дефект.
+   *
+   * Порядок выкладки такой: собрали → закоммитили код → пересобрали (штамп
+   * записал новый HEAD) → закоммитили сам штамп. В момент записи штампа
+   * коммита со штампом ещё не существует, поэтому «собрано X, HEAD X+1»
+   * неизбежно. Раньше здесь стояло предупреждение, и оно висело на каждой
+   * выкладке — то есть приучало пролистывать предупреждения, включая важные.
+   *
+   * Отличаем норму от настоящего расхождения по содержимому: если между
+   * коммитом штампа и HEAD менялся ТОЛЬКО .build-info.json, сборка
+   * соответствует коду. Если менялся любой другой файл — предупреждаем.
+   */
+  const onlyStampSince = (() => {
+    if (!stamp.sha || stamp.sha === headSha) return false;
+    try {
+      const changed = execFileSync("git", ["diff", "--name-only", stamp.sha, "HEAD"], {
+        cwd: rootDir,
+        encoding: "utf8",
+      })
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean);
+      return changed.length > 0 && changed.every((file) => file.endsWith(".build-info.json"));
+    } catch {
+      return false;
+    }
+  })();
+
   if (stamp.sha === headSha) {
     ok(`сборка из текущего коммита`, `${stamp.shortSha}, ${when}`);
+  } else if (onlyStampSince) {
+    ok(
+      `сборка соответствует коду`,
+      `${stamp.shortSha}, после неё менялся только штамп (HEAD ${headSha.slice(0, 7)})`,
+    );
   } else {
     warn(
       "сборка сделана НЕ из текущего коммита",
