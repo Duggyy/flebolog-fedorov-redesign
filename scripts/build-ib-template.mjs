@@ -141,6 +141,32 @@ for (const section of sections) {
   }
 }
 
+/**
+ * Поля, которые реально есть в форме.
+ *
+ * Зачем сверять. Запись справочника привязана к полю по СТРОКЕ названия: если
+ * SECTION_MAP укажет поле, которого в форме нет, ошибки не будет ни при сборке,
+ * ни при загрузке — записи просто осядут в справочнике и никогда не появятся
+ * в панели подсказок. Двадцать разделов в никуда выглядят как «шаблон
+ * загрузился», поэтому проверяем на месте и падаем.
+ *
+ * Список берём из src/pages/DoctorDatabase.tsx (dictionarySections) — второй
+ * копии не заводим, иначе они разъедутся.
+ */
+const readFormFields = () => {
+  const file = path.join(rootDir, "src/pages/DoctorDatabase.tsx");
+  const source = fs.readFileSync(file, "utf8");
+  const start = source.indexOf("const dictionarySections");
+  if (start === -1) return null;
+  const end = source.indexOf("]);", start);
+  if (end === -1) return null;
+  const block = source.slice(start, end);
+  return new Set([...block.matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((match) => match[1]));
+};
+
+const formFields = readFormFields();
+const orphanFields = formFields ? [...byField.keys()].filter((field) => !formFields.has(field)) : [];
+
 const payload = {
   version: "2026-10",
   source: path.basename(docxPath),
@@ -167,6 +193,11 @@ if (skipped.length) {
 if (unknown.length) {
   console.log("\n⚠️ Разделы без правила привязки — проверьте SECTION_MAP:");
   for (const item of unknown) console.log(`  ${String(item.count).padStart(3)}  ${item.title}`);
+  process.exitCode = 1;
+}
+if (orphanFields.length) {
+  console.log("\n⚠️ Поля из SECTION_MAP, которых нет в форме — записи будут невидимы:");
+  for (const field of orphanFields) console.log(`  ${field}`);
   process.exitCode = 1;
 }
 console.log(`\nЗаписано: ${path.relative(rootDir, outPath)}`);
