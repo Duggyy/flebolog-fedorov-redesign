@@ -156,6 +156,71 @@ if (configProbe.status === 200 && configIsFallback) {
   warn("api/config.php отвечает не 200", `HTTP ${configProbe.status}`);
 }
 
+// 6. Проверка под учётной записью — только если передали логин и пароль.
+//    Без них не видно самого частого: таблицы нет, а сессия и вход работают.
+//    Именно так 23.10.2026 «сервер недоступен» оказался «не применена миграция».
+const login = readFlag("--login", "");
+const password = readFlag("--password", "");
+if (login && password) {
+  const loginResponse = await fetch(`${BASE}/api/index.php?action=login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ login, password }),
+  }).catch(() => null);
+
+  if (!loginResponse) {
+    fail("не удалось войти", "запрос не ушёл");
+  } else {
+    const cookie = (loginResponse.headers.getSetCookie?.() ?? [])
+      .map((item) => item.split(";")[0])
+      .join("; ");
+    const loginBody = await loginResponse.json().catch(() => null);
+    if (!loginResponse.ok || !loginBody?.session) {
+      fail("вход не выполнен", loginBody?.error ?? `HTTP ${loginResponse.status}`);
+    } else {
+      ok("вход под учётной записью работает", `${loginBody.session.role}`);
+
+      const authed = async (action) => {
+        const response = await fetch(`${BASE}/api/index.php?action=${action}`, {
+          headers: { Cookie: cookie },
+        }).catch(() => null);
+        if (!response) return null;
+        const body = await response.json().catch(() => null);
+        return { status: response.status, body };
+      };
+
+      const records = await authed("records");
+      if (!records?.body?.records) {
+        fail("пациенты и приёмы не читаются", records?.body?.error ?? "пустой ответ");
+      } else {
+        ok(
+          "пациенты и приёмы читаются",
+          `${records.body.records.patients?.length ?? 0} пациентов, ${records.body.records.visits?.length ?? 0} приёмов`,
+        );
+      }
+
+      const dictionaries = await authed("dictionaries");
+      if (dictionaries?.body?.entries) {
+        ok("справочники читаются", `${dictionaries.body.entries.length} записей`);
+      } else if (dictionaries?.body?.error === "server_error") {
+        fail(
+          "справочники не читаются: скорее всего не применена миграция",
+          "нужен файл database/migrations/2026-10-23-dictionary-entries.sql (раздел 7)",
+        );
+      } else {
+        fail("справочники не читаются", dictionaries?.body?.error ?? "пустой ответ");
+      }
+    }
+  }
+} else {
+  console.log(
+    "  ВНИМ  база под учётной записью не проверялась — передайте --login и --password,",
+  );
+  console.log(
+    "        чтобы увидеть, применены ли миграции (иначе отсутствие таблицы не заметно)",
+  );
+}
+
 console.log("\n" + "─".repeat(72));
 if (failures === 0) {
   console.log(`ИТОГ: сервер в порядке — ${BASE} можно показывать врачу.`);

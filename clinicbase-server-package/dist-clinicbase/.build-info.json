@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "619a25bda6d131c09d541ea3cfa1d012cd442a00",
-  "shortSha": "619a25b",
-  "subject": "ClinicBase: не выдавать «неверный пароль» за ненастроенный сервер",
-  "builtAt": "2026-10-23T19:56:00.182Z",
-  "dirty": false
+  "sha": "d32b1ca29a3ce04dd545d7db18d1b765f83e6a82",
+  "shortSha": "d32b1ca",
+  "subject": "Пакет ClinicBase: перештампован под 619a25b",
+  "builtAt": "2026-10-23T20:07:24.199Z",
+  "dirty": true
 }

@@ -2435,26 +2435,66 @@ const DoctorDatabase = () => {
       let activeSession = localSession;
 
       try {
-        const [serverSession, serverDoctors, serverRecords, serverDictionary] = await Promise.all([
-          apiGetSession(),
-          apiGetDoctors(),
-          apiGetRecords(),
-          apiGetDictionaries(),
-        ]);
-        activeSession = serverSession ?? localSession;
-        availableDoctors = serverDoctors;
-        availableRecords = serverRecords as MedicalRecords;
+        // Грузим по отдельности, а не одним Promise.all. Здесь это было
+        // ошибкой: 23.10.2026 не применили миграцию, таблицы dictionary_entries
+        // не оказалось, справочники ответили 500 — и Promise.all выбросил
+        // вместе с ними пациентов и врачей, которые пришли нормально. Врач
+        // увидел «Сервер недоступен, открыт демо-режим» и пустой экран, хотя
+        // данные на сервере были целы. Сбой одной ручки не должен отменять
+        // остальные.
+        const [sessionResult, doctorsResult, recordsResult, dictionaryResult] =
+          await Promise.allSettled([
+            apiGetSession(),
+            apiGetDoctors(),
+            apiGetRecords(),
+            apiGetDictionaries(),
+          ]);
+
+        if (sessionResult.status === "fulfilled") {
+          activeSession = sessionResult.value ?? localSession;
+        }
+        if (doctorsResult.status === "fulfilled") {
+          availableDoctors = doctorsResult.value;
+        }
+        if (recordsResult.status === "fulfilled") {
+          availableRecords = recordsResult.value as MedicalRecords;
+        }
 
         // Справочники сводим, а не затираем: записи, созданные в офлайне,
         // на сервере отсутствуют, и молча выбросить их значило бы стереть
         // работу врача. Недостающие отправляем следом — тихо, чтобы
         // недоступный сервер не мешал работать.
-        if (!cancelled && Array.isArray(serverDictionary)) {
-          mergeServerDictionaries(serverDictionary as DictionaryEntry[]);
+        if (
+          dictionaryResult.status === "fulfilled" &&
+          Array.isArray(dictionaryResult.value)
+        ) {
+          mergeServerDictionaries(dictionaryResult.value as DictionaryEntry[]);
+        }
+
+        // Сообщаем только про то, что действительно не пришло, и только если
+        // это не обычная офлайн-работа: без сервера демо-режим — норма.
+        const failed = [doctorsResult, recordsResult, dictionaryResult].filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected" && !isApiUnavailable(result.reason),
+        );
+        if (failed.length > 0 && !cancelled) {
+          const what =
+            failed.length === 1 && dictionaryResult.status === "rejected"
+              ? "Справочники не загрузились"
+              : "Часть данных не загрузилась";
+          toast({
+            variant: "destructive",
+            title: what,
+            description: describeServerFailure(failed[0].reason),
+          });
         }
       } catch (error) {
         if (!isApiUnavailable(error) && !cancelled) {
-          toast({ title: "Сервер недоступен", description: "Открыт локальный демо-режим." });
+          toast({
+            variant: "destructive",
+            title: "Сервер недоступен",
+            description: describeServerFailure(error),
+          });
         }
       }
 
@@ -3034,19 +3074,44 @@ const DoctorDatabase = () => {
         toast({ title: "Вход не выполнен", description: "Для базы приемов нужен логин врача." });
         return;
       }
-      const [serverDoctors, serverRecords, serverDictionary] = await Promise.all([
+
+      // Дальше — по отдельности. Вход уже состоялся, и сбой, скажем,
+      // справочников не должен выкидывать врача обратно на форму входа:
+      // пациенты и приёмы к этому моменту могут прийти нормально.
+      const [doctorsResult, recordsResult, dictionaryResult] = await Promise.allSettled([
         apiGetDoctors(),
         apiGetRecords(),
         apiGetDictionaries(),
       ]);
-      availableDoctors = serverDoctors;
+
+      if (doctorsResult.status === "fulfilled") {
+        availableDoctors = doctorsResult.value;
+      }
       foundDoctor = availableDoctors.find((item) => item.id === session.doctorId);
-      recordsRef.current = serverRecords as MedicalRecords;
-      setRecords(serverRecords as MedicalRecords);
-      if (Array.isArray(serverDictionary)) {
-        mergeServerDictionaries(serverDictionary as DictionaryEntry[]);
+
+      if (recordsResult.status === "fulfilled") {
+        recordsRef.current = recordsResult.value as MedicalRecords;
+        setRecords(recordsResult.value as MedicalRecords);
+      }
+      if (
+        dictionaryResult.status === "fulfilled" &&
+        Array.isArray(dictionaryResult.value)
+      ) {
+        mergeServerDictionaries(dictionaryResult.value as DictionaryEntry[]);
       }
       saveAuthSession(session);
+
+      const failed = [doctorsResult, recordsResult, dictionaryResult].find(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected" && !isApiUnavailable(result.reason),
+      );
+      if (failed) {
+        toast({
+          variant: "destructive",
+          title: "Вход выполнен, но загрузилось не всё",
+          description: describeServerFailure(failed.reason),
+        });
+      }
     } catch (error) {
       if (!isApiUnavailable(error)) {
         // Сервер ответил — значит дело не в связи. Но и не обязательно в
