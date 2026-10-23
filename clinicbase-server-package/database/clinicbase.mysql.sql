@@ -112,7 +112,9 @@ CREATE TABLE dictionary_entries (
   id VARCHAR(64) NOT NULL PRIMARY KEY,
   doctor_id VARCHAR(64) NULL,
   section VARCHAR(180) NOT NULL,
-  short_text TEXT NOT NULL,
+  -- 2000, а не TEXT: удлинение VARCHAR делается на месте, без перестройки
+  -- таблицы и без пересоздания внешнего ключа (см. миграцию от 23.10.2026).
+  short_text VARCHAR(2000) NOT NULL,
   full_text TEXT NULL,
   color VARCHAR(16) NULL,
   parent_id VARCHAR(64) NULL,
