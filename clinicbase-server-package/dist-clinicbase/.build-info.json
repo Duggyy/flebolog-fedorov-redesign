@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "661f98f0af77ce59893885773cd6ec64505ad524",
-  "shortSha": "661f98f",
-  "subject": "check:deploy: не предупреждать, когда после сборки менялся только штамп",
-  "builtAt": "2026-10-23T18:54:46.267Z",
+  "sha": "a6a344f9429614f1100eac28b3d16664949b50a6",
+  "shortSha": "a6a344f",
+  "subject": "build-ib-template: падать, если поле из SECTION_MAP отсутствует в форме",
+  "builtAt": "2026-10-23T18:57:05.004Z",
   "dirty": false
 }
