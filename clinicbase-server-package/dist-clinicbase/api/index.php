@@ -762,6 +762,15 @@ function visit_to_client(array $visit): array
         'manipulationResult' => 'manipulation_result',
         'nextVisitDate' => 'next_visit_date',
         'doctorComment' => 'doctor_comment',
+        // Поля из «Шаблон ИБ 2026_10». Добавлены 25.10.2026 вместе с миграцией
+        // 2026-10-25-visits-ib-fields.sql: без столбцов сервер отвечал
+        // «Unknown column», и приём не сохранялся.
+        'appealReason' => 'appeal_reason',
+        'appealCase' => 'appeal_case',
+        'diagnosisClassification' => 'diagnosis_classification',
+        'operationType' => 'operation_type',
+        'clinicalData' => 'clinical_data',
+        'dressing' => 'dressing',
     ];
     $client = [];
     foreach ($map as $clientKey => $dbKey) {
@@ -842,6 +851,12 @@ function upsert_visit(PDO $pdo, array $visit): void
         'manipulationResult' => 'manipulation_result',
         'nextVisitDate' => 'next_visit_date',
         'doctorComment' => 'doctor_comment',
+        'appealReason' => 'appeal_reason',
+        'appealCase' => 'appeal_case',
+        'diagnosisClassification' => 'diagnosis_classification',
+        'operationType' => 'operation_type',
+        'clinicalData' => 'clinical_data',
+        'dressing' => 'dressing',
     ];
 
     $columns = array_values($fields);
