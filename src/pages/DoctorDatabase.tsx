@@ -2415,7 +2415,18 @@ const DoctorDatabase = () => {
   const mergeServerDictionaries = (serverEntries: DictionaryEntry[]) => {
     const localEntries = dictionaryRef.current;
     const serverIds = new Set(serverEntries.map((entry) => entry.id));
-    const missing = localEntries.filter((entry) => !serverIds.has(entry.id));
+    // Сравниваем не только по id, но и по содержимому. 25.10.2026 миграция
+    // перенесла старые подсказки в таблицу со своими id (mig-1-1 и т. п.),
+    // а в браузере те же записи остались с id вида personal-8qi7yu. По id они
+    // «разные», и клиент отправил свои копии на сервер — у врача каждая запись
+    // задвоилась. Раздел и область в ключе обязательны: одинаковый текст в
+    // разных разделах — это две разные записи.
+    const contentKey = (entry: DictionaryEntry) =>
+      `${entry.scope}\u0000${entry.section}\u0000${entry.short}`;
+    const serverKeys = new Set(serverEntries.map(contentKey));
+    const missing = localEntries.filter(
+      (entry) => !serverIds.has(entry.id) && !serverKeys.has(contentKey(entry)),
+    );
     const merged = sortEntries([...serverEntries.map(normalizeEntry), ...missing]);
 
     dictionaryRef.current = merged;
@@ -3313,18 +3324,25 @@ const DoctorDatabase = () => {
       return;
     } catch (error) {
       if (!isApiUnavailable(error)) {
+        // Сервер ответил — значит он жив, и «недоступен» здесь было бы неправдой.
+        // 25.10.2026 так и вышло: заголовок говорил «Сервер недоступен», а в
+        // описании стояло «сервер ответил ошибкой». Врач читает заголовок.
         const hint = serverProblemHint(error);
         toast({
-          title: "Сервер недоступен",
+          variant: "destructive",
+          title: "Не удалось сохранить на сервере",
           description: hint
-            ? `Данные сохранены локально. ${hint}`
-            : "Данные сохранены локально. Повторите сохранение позже.",
+            ? `Запись осталась в этом браузере. ${hint}`
+            : "Запись осталась в этом браузере — повторите сохранение позже.",
         });
         return;
       }
     }
 
-    toast({ title: "Запись сохранена", description: "Данные приема обновлены в демо-базе." });
+    toast({
+      title: "Запись сохранена в браузере",
+      description: "Сервер не отвечает, поэтому на сервер пока ничего не ушло.",
+    });
   };
 
   const persistPrintTemplates = (nextTemplates: PrintTemplate[]) => {

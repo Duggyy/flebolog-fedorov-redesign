@@ -19,11 +19,13 @@
  *   6. База доступна: `session` не возвращает database_connection_failed.
  *   7. С флагом `--probe-width` — не обрезается ли длинный текст записи.
  *      Проверка пишет пробную запись, читает её обратно и удаляет.
+ *   8. С флагом `--probe-save` — сохраняется ли приём. Чтение и запись ломаются
+ *      по отдельности, и второе не видно, пока не нажмёшь «Сохранить».
  *
  * Запуск:
  *   node scripts/check-live.mjs
  *   node scripts/check-live.mjs --url https://clinicbase.ru
- *   node scripts/check-live.mjs --login fedorov --password 1234 --probe-width
+ *   node scripts/check-live.mjs --login fedorov --password 1234 --probe-width --probe-save
  *
  * Код возврата 1, если есть хотя бы одна ошибка.
  */
@@ -192,6 +194,16 @@ if (login && password) {
         return { status: response.status, body };
       };
 
+      const post = async (action, payload) => {
+        const response = await fetch(`${BASE}/api/index.php?action=${action}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Cookie: cookie },
+          body: JSON.stringify(payload),
+        }).catch(() => null);
+        if (!response) return null;
+        return { status: response.status, body: await response.json().catch(() => null) };
+      };
+
       const records = await authed("records");
       if (!records?.body?.records) {
         fail("пациенты и приёмы не читаются", records?.body?.error ?? "пустой ответ");
@@ -200,6 +212,27 @@ if (login && password) {
           "пациенты и приёмы читаются",
           `${records.body.records.patients?.length ?? 0} пациентов, ${records.body.records.visits?.length ?? 0} приёмов`,
         );
+      }
+
+      // 8. Сохранение приёма. Чтение и запись ломаются по отдельности: 25.10.2026
+      //    чтение работало, а сохранение падало с «Unknown column 'record_time'»,
+      //    потому что `SELECT *` не возвращает отсутствующий столбец. Проверка
+      //    отправляет серверу ровно то, что он сам только что отдал, — данные
+      //    не меняются. Только по флагу --probe-save: это запись в живую базу.
+      if (args.includes("--probe-save") && records?.body?.records) {
+        const saved = await post("records_save", { records: records.body.records });
+        if (saved?.status === 200 && saved.body?.records) {
+          ok("приём сохраняется", "данные ушли и вернулись без изменений");
+        } else {
+          const detail = saved?.body?.message ?? saved?.body?.error ?? "запрос не ушёл";
+          const missingColumn = /Unknown column '([^']+)'/.exec(String(detail))?.[1];
+          fail(
+            "приём НЕ сохраняется",
+            missingColumn
+              ? `${detail} — в таблице нет столбца ${missingColumn}, нужна миграция из раздела 7`
+              : String(detail),
+          );
+        }
       }
 
       const dictionaries = await authed("dictionaries");
@@ -221,15 +254,6 @@ if (login && password) {
       if (args.includes("--probe-width")) {
         const probeId = `check-live-${Date.now().toString(36)}`;
         const long = "П".repeat(650);
-        const post = async (action, body) => {
-          const response = await fetch(`${BASE}/api/index.php?action=${action}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Cookie: cookie },
-            body: JSON.stringify(body),
-          }).catch(() => null);
-          if (!response) return null;
-          return { status: response.status, body: await response.json().catch(() => null) };
-        };
 
         const saved = await post("dictionary_save", {
           entry: {

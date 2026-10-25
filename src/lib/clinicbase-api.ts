@@ -12,6 +12,27 @@ export class ApiUnavailableError extends Error {
   }
 }
 
+/**
+ * Ошибка, которую сервер назвал сам.
+ *
+ * Кроме кода хранит `detail` — текст, который сервер прислал в поле `message`
+ * (обычно это SQL-ошибка вида «Unknown column 'record_time' in 'field list'»).
+ * 25.10.2026 без него пришлось отдельным скриптом дёргать API, чтобы узнать
+ * причину: на экране было только «сервер ответил ошибкой». Текст показываем
+ * в описании сообщения — он английский, зато называет виновника точно.
+ */
+export class ApiError extends Error {
+  readonly code: string;
+  readonly detail: string;
+
+  constructor(code: string, detail = "") {
+    super(code);
+    this.name = "ApiError";
+    this.code = code;
+    this.detail = detail;
+  }
+}
+
 const apiUrl = (action: string) => `/api/index.php?action=${encodeURIComponent(action)}`;
 
 const request = async <T>(action: string, options: RequestInit = {}): Promise<T> => {
@@ -29,12 +50,12 @@ const request = async <T>(action: string, options: RequestInit = {}): Promise<T>
     throw new ApiUnavailableError();
   }
 
-  const payload = (await response.json()) as T & { error?: string };
+  const payload = (await response.json()) as T & { error?: string; message?: string };
   if (!response.ok) {
     if (response.status === 404) {
       throw new ApiUnavailableError();
     }
-    throw new Error(payload.error ?? "api_error");
+    throw new ApiError(payload.error ?? "api_error", payload.message ?? "");
   }
 
   return payload;
