@@ -185,17 +185,6 @@ const consultationTypes = [
   "Послеоперационный осмотр",
 ];
 
-/**
- * Запасные варианты для полей выбора.
- *
- * Основной источник — справочник: врач правит варианты на экране
- * «Справочники», и они сразу появляются в списке. Запасной набор нужен на
- * случай, когда справочник пуст, — например, шаблон ИБ ещё не загружен.
- * Значения взяты из «Шаблон ИБ 2026_10» дословно.
- */
-const appealReasonFallback = ["Лечебно-диагностический", "Консультация", "Диагностический"];
-const appealCaseFallback = ["Первичный", "Повторный"];
-
 const storageKey = "fedorov-medical-records-v1";
 const printTemplatesStorageKey = "clinicbase-print-templates-v1";
 const primaryConsultationType = "Первичная консультация флеболога";
@@ -911,14 +900,59 @@ const suggestionTextsFor = (entries: DictionaryEntry[], section: string) => {
 };
 
 /**
- * Варианты для поля выбора: справочник, а если он пуст — запасной набор.
+ * Дефис в начале записи — признак подпункта.
  *
- * Именно «если пуст», а не «справочник плюс запасные»: иначе после загрузки
- * шаблона врач видел бы каждый вариант дважды — свой и встроенный.
+ * Так врач размечает раскрывающиеся подсказки: «Состояние после» — родитель,
+ * «-флебэктомии», «-ЭВЛК» — его подпункты. Дефис нужен только на время
+ * разработки: это разметка, а не текст, поэтому и при показе, и при вставке
+ * в поле он срезается. Тире и длинное тире считаем тем же знаком — их легко
+ * набрать по привычке, и подпункт не должен из-за этого потеряться.
  */
-const choiceOptions = (entries: DictionaryEntry[], section: string, fallback: string[]) => {
-  const fromDictionary = suggestionTextsFor(entries, section);
-  return fromDictionary.length > 0 ? fromDictionary : fallback;
+const suggestionDash = /^\s*[-–—]\s*/;
+
+const isSuggestionChild = (text: string) => suggestionDash.test(text);
+
+const stripSuggestionDash = (text: string) => {
+  const stripped = text.replace(suggestionDash, "");
+  // Запись из одного дефиса — не подпункт с пустым текстом: оставляем как есть.
+  return stripped.trim() ? stripped : text;
+};
+
+type SuggestionNode = {
+  entry: DictionaryEntry;
+  /** Текст без дефиса: его видит врач, и он же уходит в поле. */
+  text: string;
+  children: Array<{ entry: DictionaryEntry; text: string }>;
+};
+
+/**
+ * Разбор раздела на подсказки и их подпункты.
+ *
+ * Подпунктом считается дефисная строка, у которой есть родитель — ближайшая
+ * выше подсказка без дефиса. Если дефис стоит в начале раздела
+ * («Наследственность по основному заболеванию», «Клинические данные»),
+ * родителя нет и раскрывать нечего: такие записи остаются обычными
+ * подсказками, только без дефиса. Плюс у них был бы обманом — щелчок
+ * ничего бы не раскрыл.
+ *
+ * Родителем становится именно предыдущая подсказка, а не предыдущая строка:
+ * иначе вторая дефисная строка подряд оказалась бы родителем третьей, и
+ * подпункты рассыпались бы по одному.
+ */
+const buildSuggestionTree = (entries: DictionaryEntry[]): SuggestionNode[] => {
+  const nodes: SuggestionNode[] = [];
+
+  for (const entry of entries) {
+    const text = stripSuggestionDash(entry.short);
+    const previous = nodes[nodes.length - 1];
+    if (isSuggestionChild(entry.short) && previous && !isSuggestionChild(previous.entry.short)) {
+      previous.children.push({ entry, text });
+    } else {
+      nodes.push({ entry, text, children: [] });
+    }
+  }
+
+  return nodes;
 };
 
 /**
@@ -1295,18 +1329,65 @@ const SuggestionPanel = ({
 }) => {
   const [filter, setFilter] = useState("");
   const query = filter.trim().toLowerCase();
+  // Раскрытые подсказки — по id записи. Массив, а не Set: так React видит
+  // новое значение и перерисовывает панель.
+  const [expanded, setExpanded] = useState<string[]>([]);
+
+  // Сменили раздел или вкладку — раскрытие сбрасываем. Иначе в новом разделе
+  // остались бы раскрытыми чужие строки, и это выглядело бы беспорядком.
+  useEffect(() => {
+    setExpanded([]);
+  }, [label, scope]);
 
   const countIn = (value: DictionaryScope) =>
     entries.filter((entry) => entry.scope === value).length;
   const scoped = entries.filter((entry) => entry.scope === scope);
+  const tree = buildSuggestionTree(scoped);
+
   // Ищем и по краткому имени, и по полному тексту: врач помнит формулировку,
   // а не то, как он её сократил.
-  const visible = query
-    ? scoped.filter(
-        (entry) =>
-          entry.short.toLowerCase().includes(query) || entry.full.toLowerCase().includes(query),
-      )
-    : scoped;
+  const matches = (entry: DictionaryEntry, text: string) =>
+    !query || text.toLowerCase().includes(query) || entry.full.toLowerCase().includes(query);
+
+  /**
+   * Что показать: подсказку и её подпункты.
+   *
+   * Родитель остаётся на экране, даже если совпал только подпункт: без него
+   * непонятно, к чему этот подпункт относится. При активном фильтре подпункты
+   * раскрываются сами — иначе найденная строка осталась бы спрятанной за
+   * плюсом, и поиск выглядел бы сломанным.
+   */
+  const rows = tree
+    .map((node) => {
+      const children = query
+        ? node.children.filter((child) => matches(child.entry, child.text))
+        : node.children;
+      return {
+        node,
+        children,
+        // Плюс есть только у подсказки с подпунктами. Пока идёт поиск,
+        // раскрытием управляет он, и плюс был бы мёртвой кнопкой.
+        toggleable: node.children.length > 0 && !query,
+        open: query ? children.length > 0 : expanded.includes(node.entry.id),
+        visible: matches(node.entry, node.text) || children.length > 0,
+      };
+    })
+    .filter((row) => row.visible);
+
+  // Отступ под плюс нужен, только если в разделе есть что раскрывать:
+  // иначе обычный список выглядел бы сдвинутым вправо без причины.
+  const hasAnyChildren = tree.some((node) => node.children.length > 0);
+
+  const toggle = (id: string) =>
+    setExpanded((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+
+  // Раскрыть и оставить раскрытым: этим пользуется щелчок по самой подсказке.
+  // Схлопывать там нельзя — врач вставляет текст, и подпункты должны быть
+  // видны сразу; убрать их можно плюсом.
+  const expand = (id: string) =>
+    setExpanded((current) => (current.includes(id) ? current : [...current, id]));
 
   return (
     <aside
@@ -1397,42 +1478,112 @@ const SuggestionPanel = ({
               справочник — это плотный текстовый столбец, а не карточки.
               На экране 900 px так помещается около 40 записей вместо 12. */}
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {visible.length > 0 ? (
-              visible.map((entry) => (
-                <div
-                  key={entry.id}
-                  data-testid="dictionary-row"
-                  data-scope={entry.scope}
-                  className="group flex items-start border-b border-[#e1e5eb] last:border-b-0 hover:bg-[#e3e9f2]"
-                >
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 px-1.5 py-[2px] text-left text-[11px] leading-[1.25]"
-                    // Цвет приходит из справочника: врач помечает им записи,
-                    // которые нельзя перепутать (например, «не выводить
-                    // на печать»).
-                    style={entry.color ? { color: entry.color } : undefined}
-                    title={entry.full || entry.short}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => onPick(entry.short)}
+            {rows.length > 0 ? (
+              rows.map(({ node, children, toggleable, open }) => (
+                <div key={node.entry.id} data-testid="suggestion-group">
+                  <div
+                    data-testid="dictionary-row"
+                    data-scope={node.entry.scope}
+                    className="group flex items-start border-b border-[#e1e5eb] hover:bg-[#e3e9f2]"
                   >
-                    {entry.short}
-                  </button>
-                  {entry.scope === "personal" ? (
+                    {hasAnyChildren ? (
+                      toggleable ? (
+                        <button
+                          type="button"
+                          data-testid="suggestion-toggle"
+                          aria-expanded={open}
+                          aria-label={
+                            open
+                              ? `Свернуть подпункты: ${node.text}`
+                              : `Раскрыть подпункты: ${node.text}`
+                          }
+                          className="w-3.5 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#185fa5] hover:text-[#0c447c]"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => toggle(node.entry.id)}
+                        >
+                          {open ? "−" : "+"}
+                        </button>
+                      ) : (
+                        // Место под плюс оставляем: тексты должны начинаться
+                        // на одной линии, иначе столбец выглядит рваным.
+                        <span className="w-3.5 shrink-0" aria-hidden="true" />
+                      )
+                    ) : null}
                     <button
                       type="button"
-                      className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                      data-testid="suggestion-pick"
+                      className="min-w-0 flex-1 px-1.5 py-[2px] text-left text-[11px] leading-[1.25]"
+                      // Цвет приходит из справочника: врач помечает им записи,
+                      // которые нельзя перепутать (например, «не выводить
+                      // на печать»).
+                      style={node.entry.color ? { color: node.entry.color } : undefined}
+                      title={node.entry.full || node.text}
                       onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => onDelete(entry.short)}
-                      aria-label={`Удалить запись: ${entry.short}`}
+                      onClick={() => {
+                        // Щелчок по подсказке и вставляет её, и раскрывает
+                        // подпункты: врач сначала вставляет «Состояние после»,
+                        // а потом дописывает «флебэктомии» — так и задумано.
+                        if (node.children.length > 0) expand(node.entry.id);
+                        onPick(node.text);
+                      }}
                     >
-                      ×
+                      {node.text}
                     </button>
-                  ) : (
-                    // Общая запись принадлежит всем врачам — из узкой панели
-                    // её не удаляют, для этого есть экран «Справочники».
-                    <span className="w-4 shrink-0" aria-hidden="true" />
-                  )}
+                    {node.entry.scope === "personal" ? (
+                      <button
+                        type="button"
+                        className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => onDelete(node.entry.short)}
+                        aria-label={`Удалить запись: ${node.text}`}
+                      >
+                        ×
+                      </button>
+                    ) : (
+                      // Общая запись принадлежит всем врачам — из узкой панели
+                      // её не удаляют, для этого есть экран «Справочники».
+                      <span className="w-4 shrink-0" aria-hidden="true" />
+                    )}
+                  </div>
+
+                  {open
+                    ? children.map((child) => (
+                        <div
+                          key={child.entry.id}
+                          data-testid="suggestion-child"
+                          data-scope={child.entry.scope}
+                          className="group flex items-start border-b border-[#e1e5eb] bg-white/50 hover:bg-[#e3e9f2]"
+                        >
+                          {hasAnyChildren ? <span className="w-3.5 shrink-0" aria-hidden="true" /> : null}
+                          <button
+                            type="button"
+                            data-testid="suggestion-pick"
+                            // Подпункт отбит вправо и помечен линией: видно,
+                            // что он относится к строке выше, а не сам по себе.
+                            className="min-w-0 flex-1 border-l-2 border-[#cfd7e2] py-[2px] pl-3 pr-1.5 text-left text-[11px] leading-[1.25]"
+                            style={child.entry.color ? { color: child.entry.color } : undefined}
+                            title={child.entry.full || child.text}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => onPick(child.text)}
+                          >
+                            {child.text}
+                          </button>
+                          {child.entry.scope === "personal" ? (
+                            <button
+                              type="button"
+                              className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => onDelete(child.entry.short)}
+                              aria-label={`Удалить запись: ${child.text}`}
+                            >
+                              ×
+                            </button>
+                          ) : (
+                            <span className="w-4 shrink-0" aria-hidden="true" />
+                          )}
+                        </div>
+                      ))
+                    : null}
                 </div>
               ))
             ) : (
@@ -1496,6 +1647,7 @@ const Field = ({
   type = "text",
   onActivateSuggestions,
   stacked = false,
+  replaceOnInsert = false,
 }: {
   label: string;
   value: string;
@@ -1504,6 +1656,15 @@ const Field = ({
   onActivateSuggestions?: (target: SuggestionTarget) => void;
   /** Подпись над полем вместо ячейки слева — для форм входа, где нет таблицы. */
   stacked?: boolean;
+  /**
+   * Вставлять подсказку вместо содержимого, а не в позицию курсора.
+   *
+   * Для полей с одним значением («Повод обращения», «Случай обращения»):
+   * там выбор — это замена, а не дописывание. Иначе второй щелчок давал бы
+   * «Лечебно-диагностический Консультация», и формальное поле, по которому
+   * считают статистику, тихо превращалось бы в свободный текст.
+   */
+  replaceOnInsert?: boolean;
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const valueRef = useRef(value);
@@ -1519,8 +1680,13 @@ const Field = ({
     onActivateSuggestions?.({
       label,
       insert: (suggestion: string) => {
+        const input = inputRef.current;
+        if (replaceOnInsert) {
+          onChange(suggestion);
+          requestAnimationFrame(() => input?.focus());
+          return;
+        }
         const currentValue = valueRef.current;
-    const input = inputRef.current;
         const start = input?.selectionStart ?? currentValue.length;
         const end = input?.selectionEnd ?? currentValue.length;
         const { nextValue, cursorPosition } = insertSuggestionWithSpacing(
@@ -1529,11 +1695,11 @@ const Field = ({
           start,
           end,
         );
-    onChange(nextValue);
-    requestAnimationFrame(() => {
-      input?.focus();
-      input?.setSelectionRange(cursorPosition, cursorPosition);
-    });
+        onChange(nextValue);
+        requestAnimationFrame(() => {
+          input?.focus();
+          input?.setSelectionRange(cursorPosition, cursorPosition);
+        });
       },
     });
   };
@@ -1557,60 +1723,11 @@ const Field = ({
 };
 
 /**
- * Поле выбора из справочника.
- *
- * «Повод обращения» и «Случай обращения» — формальные поля истории болезни:
- * значения взаимоисключающие. Свободный текст дал бы «первичный», «Первичный»
- * и «ПЕРВИЧНЫЙ» в одной базе, а по этим полям потом считают статистику.
- *
- * Список берётся из справочника того же раздела, поэтому второй копии нет:
- * врач правит варианты на экране «Справочники» — список меняется здесь.
- * Щелчок по подсказке в правой панели тоже ставит значение.
+ * «Повод обращения» и «Случай обращения» — обычные поля ввода, а выбор
+ * приходит из справочника: щелчок по подсказке в правой панели ставит
+ * значение целиком (`replaceOnInsert`). Отдельного списка больше нет —
+ * врач может и напечатать формулировку, которой в справочнике ещё нет.
  */
-const ChoiceField = ({
-  label,
-  value,
-  options,
-  onChange,
-  onActivateSuggestions,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-  onActivateSuggestions?: (target: SuggestionTarget) => void;
-}) => {
-  const selectId = useId();
-  // Значение может быть не из списка: вариант удалили из справочника или он
-  // пришёл из старой записи. Показываем его отдельным пунктом — иначе браузер
-  // молча выберет первый вариант, и подмены никто не заметит.
-  const items = value && !options.includes(value) ? [...options, value] : options;
-
-  return (
-    <div className={rowClass}>
-      <Label htmlFor={selectId} className={labelCellClass}>
-        {label}
-      </Label>
-      <select
-        id={selectId}
-        className={`h-7 ${valueCellClass}`}
-        value={value}
-        onFocus={() =>
-          onActivateSuggestions?.({ label, insert: (suggestion: string) => onChange(suggestion) })
-        }
-        onChange={(event) => onChange(event.target.value)}
-      >
-        <option value="">—</option>
-        {items.map((item) => (
-          <option key={item} value={item}>
-            {item}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-};
-
 const Area = ({
   label,
   value,
@@ -2379,6 +2496,10 @@ const DictionariesDialog = ({
                     onChange={(event) => setDraft({ ...draft, short: event.target.value })}
                     className="min-h-[54px] bg-white text-[11px]"
                   />
+                  <p className="text-[10px] leading-snug text-muted-foreground">
+                    Дефис в начале строки делает её подпунктом предыдущей подсказки: в панели она
+                    раскроется по плюсу, а сам дефис в текст поля не попадёт.
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <Label htmlFor="dictionary-full" className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -2532,17 +2653,6 @@ const DoctorDatabase = () => {
   useEffect(() => {
     localStorage.setItem(panelWidthStorageKey, String(panelWidth));
   }, [panelWidth]);
-
-  // Варианты для полей выбора. Пересчитываются при правке справочника, поэтому
-  // вариант, добавленный в «Справочниках», сразу виден в форме.
-  const appealReasonOptions = useMemo(
-    () => choiceOptions(dictionaryEntries, "Повод обращения", appealReasonFallback),
-    [dictionaryEntries],
-  );
-  const appealCaseOptions = useMemo(
-    () => choiceOptions(dictionaryEntries, "Случай обращения", appealCaseFallback),
-    [dictionaryEntries],
-  );
 
   // Ширина хранится в пикселях, но окно могло стать уже — не даём панели
   // занять больше половины экрана.
@@ -3952,19 +4062,21 @@ const DoctorDatabase = () => {
                         ))}
                       </select>
                     </div>
-                    <ChoiceField
+                    <Field
                       label="Повод обращения"
+                      type="text"
                       value={selectedVisit.appealReason}
-                      options={appealReasonOptions}
                       onChange={(value) => updateVisit("appealReason", value)}
                       onActivateSuggestions={activateSuggestionTarget}
+                      replaceOnInsert
                     />
-                    <ChoiceField
+                    <Field
                       label="Случай обращения"
+                      type="text"
                       value={selectedVisit.appealCase}
-                      options={appealCaseOptions}
                       onChange={(value) => updateVisit("appealCase", value)}
                       onActivateSuggestions={activateSuggestionTarget}
+                      replaceOnInsert
                     />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Жалобы" value={selectedVisit.complaints} onChange={(value) => updateVisit("complaints", value)} />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Анамнез заболевания" value={selectedVisit.diseaseHistory} onChange={(value) => updateVisit("diseaseHistory", value)} />
@@ -4115,10 +4227,13 @@ const DoctorDatabase = () => {
               </p>
               {templateInfo.skipped > 0 ? (
                 <p className="text-muted-foreground">
-                  Ещё {templateInfo.skipped} записей не войдут: для них в форме нет полей
-                  (повод и случай обращения, перевязки, клинические данные, вид операции).
+                  Ещё {templateInfo.skipped} записей не войдут: для их разделов в форме нет полей.
                 </p>
               ) : null}
+              <p className="text-muted-foreground">
+                Строки с дефисом в начале станут подпунктами предыдущей подсказки — в панели они
+                раскрываются по плюсу.
+              </p>
               <p className="text-muted-foreground">
                 Если ляжет не так — отмена там же, в меню «Справочники».
               </p>
