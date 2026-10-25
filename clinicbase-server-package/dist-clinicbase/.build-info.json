@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "1be6acb3985429c1d2236d7c689f2975017eae23",
-  "shortSha": "1be6acb",
-  "subject": "Подсказки раскрываются: дефис в начале строки — подпункт",
-  "builtAt": "2026-10-25T19:15:01.966Z",
-  "dirty": true
+  "sha": "41a9c2442f2151b9e35071fc3dc2ca92975a24de",
+  "shortSha": "41a9c24",
+  "subject": "Пакет ClinicBase: сборка с раскрывающимися подсказками",
+  "builtAt": "2026-10-25T19:15:48.990Z",
+  "dirty": false
 }
