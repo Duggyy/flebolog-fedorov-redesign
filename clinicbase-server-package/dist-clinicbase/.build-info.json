@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "a01334a201d4ede07839bc3d1b5ab4a31f8088bf",
-  "shortSha": "a01334a",
-  "subject": "Справочники: расширять текст через VARCHAR(2000), а не TEXT",
-  "builtAt": "2026-10-23T20:42:27.220Z",
+  "sha": "9ce13b784c3df038df4fd14c0132d8d129c1ba67",
+  "shortSha": "9ce13b7",
+  "subject": "Сохранение приёма: причина видна на экране, справочники не задваиваются",
+  "builtAt": "2026-10-25T05:13:34.063Z",
   "dirty": false
 }
