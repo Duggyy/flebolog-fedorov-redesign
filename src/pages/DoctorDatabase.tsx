@@ -929,31 +929,53 @@ type SuggestionNode = {
 /**
  * Разбор раздела на подсказки и их подпункты.
  *
- * Подпунктом считается дефисная строка, у которой есть родитель — ближайшая
- * выше подсказка без дефиса. Если дефис стоит в начале раздела
- * («Наследственность по основному заболеванию», «Клинические данные»),
- * родителя нет и раскрывать нечего: такие записи остаются обычными
- * подсказками, только без дефиса. Плюс у них был бы обманом — щелчок
- * ничего бы не раскрыл.
+ * Главный источник правды — `parentId`: подпункт хранит id своей подсказки.
+ * Пока его не было, связь выводилась из порядка строк («дефисная строка
+ * относится к ближайшей выше подсказке без дефиса»), и этого хватало ровно до
+ * первой чужой записи между родителем и его подпунктами. 26.10.2026 так и
+ * вышло: в живом справочнике две записи из прошлой загрузки шаблона получили
+ * те же номера порядка (1 и 2), что и подпункты «-Считает себя больным более»
+ * и «-1 года». Порядок перемешался, «1 года» привязалось к чужой подсказке,
+ * а под «Считает себя больной более» остался один подпункт. Врач открыл плюс,
+ * не увидел лет и справедливо решил, что их нет вовсе.
  *
- * Родителем становится именно предыдущая подсказка, а не предыдущая строка:
- * иначе вторая дефисная строка подряд оказалась бы родителем третьей, и
- * подпункты рассыпались бы по одному.
+ * Поэтому: если у записи есть `parentId` и такой родитель в разделе есть —
+ * подпункт ставится к нему, и порядок строк уже ничего не решает. Старые
+ * записи без `parentId` разбираются по дефису, как раньше, — иначе справочник
+ * у тех, кто ещё не перезагрузил шаблон, развалился бы на плоский список.
+ *
+ * Дефисная строка без родителя (начало раздела: «Наследственность по основному
+ * заболеванию», «Клинические данные») остаётся обычной подсказкой без плюса:
+ * раскрывать нечего, плюс был бы обманом.
  */
 const buildSuggestionTree = (entries: DictionaryEntry[]): SuggestionNode[] => {
-  const nodes: SuggestionNode[] = [];
+  const nodes: SuggestionNode[] = entries.map((entry) => ({
+    entry,
+    text: stripSuggestionDash(entry.short),
+    children: [],
+  }));
+  const byId = new Map(nodes.map((node) => [node.entry.id, node]));
+  const roots: SuggestionNode[] = [];
+  // Последняя подсказка верхнего уровня — родитель для дефисных строк без
+  // parentId. Именно подсказка, а не предыдущая строка: иначе вторая дефисная
+  // строка подряд стала бы родителем третьей, и подпункты рассыпались бы.
+  let lastRoot: SuggestionNode | null = null;
 
-  for (const entry of entries) {
-    const text = stripSuggestionDash(entry.short);
-    const previous = nodes[nodes.length - 1];
-    if (isSuggestionChild(entry.short) && previous && !isSuggestionChild(previous.entry.short)) {
-      previous.children.push({ entry, text });
-    } else {
-      nodes.push({ entry, text, children: [] });
+  for (const node of nodes) {
+    const explicitParent = node.entry.parentId ? byId.get(node.entry.parentId) : undefined;
+    if (explicitParent && explicitParent !== node) {
+      explicitParent.children.push({ entry: node.entry, text: node.text });
+      continue;
     }
+    if (isSuggestionChild(node.entry.short) && lastRoot) {
+      lastRoot.children.push({ entry: node.entry, text: node.text });
+      continue;
+    }
+    roots.push(node);
+    lastRoot = node;
   }
 
-  return nodes;
+  return roots;
 };
 
 /**
@@ -2707,12 +2729,37 @@ const DoctorDatabase = () => {
     const missing = localEntries.filter(
       (entry) => !serverIds.has(entry.id) && !serverKeys.has(contentKey(entry)),
     );
-    const merged = sortEntries([...serverEntries.map(normalizeEntry), ...missing]);
 
-    dictionaryRef.current = merged;
-    setDictionaryEntries(merged);
-    saveDictionaries(merged);
-    missing.forEach((entry) => {
+    // Записи, которых на сервере нет, дописываем в конец своего раздела, а не
+    // отправляем с прежним номером. 26.10.2026 именно это и сломало подсказки:
+    // в браузере остался справочник от прошлой загрузки шаблона, две записи
+    // из него сервер не знал, и клиент вернул их с номерами 1 и 2 — теми же,
+    // что у подпунктов «-Считает себя больным более» и «-1 года». Порядок
+    // перемешался, годы стажа привязались к чужим подсказкам, и врач не нашёл
+    // их под «Считает себя больной более».
+    //
+    // Номер считаем от самого большого в разделе и дальше по возрастанию:
+    // запись сохраняется (работа врача не пропадает), но никого не раздвигает.
+    const base = [...serverEntries.map(normalizeEntry), ...missing];
+    const tail = new Map<string, number>();
+    const nextOrder = (section: string) => {
+      if (!tail.has(section)) {
+        const top = base
+          .filter((entry) => entry.section === section)
+          .reduce((max, entry) => Math.max(max, entry.order), -1);
+        tail.set(section, top + 1);
+      }
+      const value = tail.get(section) ?? 0;
+      tail.set(section, value + 1);
+      return value;
+    };
+    const requeued = missing.map((entry) => ({ ...entry, order: nextOrder(entry.section) }));
+    const ordered = sortEntries([...serverEntries.map(normalizeEntry), ...requeued]);
+
+    dictionaryRef.current = ordered;
+    setDictionaryEntries(ordered);
+    saveDictionaries(ordered);
+    requeued.forEach((entry) => {
       apiSaveDictionaryEntry(entry).catch(() => undefined);
     });
   };
@@ -2965,6 +3012,25 @@ const DoctorDatabase = () => {
       .reduce((max, entry) => Math.max(max, entry.order + 1), 0);
 
   /**
+   * Родитель для новой дефисной записи.
+   *
+   * Ближайшая выше подсказка без дефиса в том же разделе и наборе — та же
+   * логика, что при загрузке шаблона. Без этого связь держалась бы только на
+   * порядке строк, а новая запись уходит в конец раздела: подпункт оказался бы
+   * далеко от своей подсказки и привязался бы к чужой.
+   */
+  const parentIdForNewEntry = (section: string, text: string, scope: DictionaryScope) => {
+    if (!isSuggestionChild(text)) return "";
+    const sameScope = dictionaryEntries
+      .filter((entry) => entry.section === section && entry.scope === scope)
+      .sort((a, b) => a.order - b.order);
+    for (let index = sameScope.length - 1; index >= 0; index -= 1) {
+      if (!isSuggestionChild(sameScope[index].short)) return sameScope[index].id;
+    }
+    return "";
+  };
+
+  /**
    * Групповая вставка из буфера.
    *
    * Сначала пробуем сервер: он сам выдаёт идентификаторы и возвращает готовый
@@ -3073,19 +3139,28 @@ const DoctorDatabase = () => {
       const payload = await readTemplateFile();
       const imported: DictionaryEntry[] = [];
       payload.sections.forEach((section) => {
+        // Подпункт привязываем к родителю сразу, id: порядок строк после
+        // загрузки может измениться (и менялся — см. buildSuggestionTree),
+        // а связь «этот подпункт к этой подсказке» должна пережить любую
+        // пересортировку. Дефис остаётся разметкой: он нужен, чтобы врач
+        // видел структуру в самом документе, и срезается при показе.
+        let lastParentId = "";
         section.entries.forEach((text, index) => {
+          const id = stableId("global", section.title, text);
+          const child = isSuggestionChild(text);
           imported.push({
             // id устойчивый: повторная загрузка того же шаблона не создаст
             // вторую копию записи, а отмена вернёт те же идентификаторы.
-            id: stableId("global", section.title, text),
+            id,
             section: section.title,
             short: text,
             full: "",
             color: "",
-            parentId: "",
+            parentId: child ? lastParentId : "",
             order: index,
             scope: "global",
           });
+          if (!child) lastParentId = id;
         });
       });
       if (imported.length === 0) {
@@ -3197,7 +3272,7 @@ const DoctorDatabase = () => {
       short: nextPhrase,
       full: "",
       color: "",
-      parentId: "",
+      parentId: parentIdForNewEntry(activeSuggestionTarget.label, nextPhrase, panelScope),
       order: nextOrderInSection(activeSuggestionTarget.label),
       // Новая запись уходит в открытую вкладку: врач видит «Общие» — значит,
       // пишет в общие, и запись сразу появляется там, где он смотрит.
