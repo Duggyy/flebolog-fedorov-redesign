@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "41a9c2442f2151b9e35071fc3dc2ca92975a24de",
-  "shortSha": "41a9c24",
-  "subject": "Пакет ClinicBase: сборка с раскрывающимися подсказками",
-  "builtAt": "2026-10-25T19:15:48.990Z",
-  "dirty": false
+  "sha": "815cffb9654f8890f8b839a52afc56a087e03a76",
+  "shortSha": "815cffb",
+  "subject": "Подсказки в справочнике разнесены, перед каждой книжка",
+  "builtAt": "2026-10-25T20:38:38.345Z",
+  "dirty": true
 }
