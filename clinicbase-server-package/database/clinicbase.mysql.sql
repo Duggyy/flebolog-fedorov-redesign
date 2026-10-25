@@ -73,6 +73,14 @@ CREATE TABLE visits (
   manipulation_result TEXT NULL,
   next_visit_date DATE NULL,
   doctor_comment TEXT NULL,
+  -- Поля из «Шаблон ИБ 2026_10», которых раньше не было в форме.
+  -- Миграция 2026-10-25-visits-ib-fields.sql добавляет их в конец таблицы.
+  appeal_reason VARCHAR(64) NULL,
+  appeal_case VARCHAR(64) NULL,
+  diagnosis_classification TEXT NULL,
+  operation_type VARCHAR(64) NULL,
+  clinical_data TEXT NULL,
+  dressing TEXT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_visits_patient

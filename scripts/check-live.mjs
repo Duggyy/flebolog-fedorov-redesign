@@ -21,6 +21,9 @@
  *      Проверка пишет пробную запись, читает её обратно и удаляет.
  *   8. С флагом `--probe-save` — сохраняется ли приём. Чтение и запись ломаются
  *      по отдельности, и второе не видно, пока не нажмёшь «Сохранить».
+ *   9. Сервер знает новые поля приёма из шаблона ИБ (повод и случай обращения,
+ *      классификация диагноза, вид операции, клинические данные, перевязка).
+ *      Старый api/index.php их не отдаёт — и тогда они теряются молча.
  *
  * Запуск:
  *   node scripts/check-live.mjs
@@ -231,6 +234,31 @@ if (login && password) {
             missingColumn
               ? `${detail} — в таблице нет столбца ${missingColumn}, нужна миграция из раздела 7`
               : String(detail),
+          );
+        }
+      }
+
+      // 9. Новые поля приёма из шаблона ИБ. Старый api/index.php их просто не
+      //    отдаёт: экран заполнится, врач ничего не заметит, а в базе останется
+      //    пусто. Наличие ключей в ответе — единственный внешний признак того,
+      //    что выгружен новый api/index.php.
+      const ibVisitFields = [
+        "appealReason",
+        "appealCase",
+        "diagnosisClassification",
+        "operationType",
+        "clinicalData",
+        "dressing",
+      ];
+      const sampleVisit = records?.body?.records?.visits?.[0];
+      if (sampleVisit) {
+        const absent = ibVisitFields.filter((field) => !(field in sampleVisit));
+        if (absent.length === 0) {
+          ok("новые поля приёма сервер знает", `${ibVisitFields.length} полей из шаблона ИБ`);
+        } else {
+          fail(
+            "сервер не знает новые поля приёма",
+            `нет: ${absent.join(", ")} — на хостинге старый api/index.php, выгрузите архив заново`,
           );
         }
       }

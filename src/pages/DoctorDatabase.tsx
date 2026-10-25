@@ -60,7 +60,7 @@ import {
   isApiUnavailable,
 } from "@/lib/clinicbase-api";
 import { describeServerFailure, serverProblemHint } from "@/lib/clinicbase-errors";
-import { DoctorUser, initialDoctors, loadDoctorUsers } from "@/lib/doctor-users";
+import { DoctorUser, emptyDoctorUser, initialDoctors, loadDoctorUsers } from "@/lib/doctor-users";
 
 type Patient = {
   id: string;
@@ -121,6 +121,20 @@ type Visit = {
   manipulationResult: string;
   nextVisitDate: string;
   doctorComment: string;
+  /**
+   * Поля из «Шаблон ИБ 2026_10», добавленные 25.10.2026.
+   *
+   * В шаблоне это шесть разделов, под которые в форме не было места, — при
+   * загрузке их 30 записей попадали в отчёт «нет поля в форме». Формальные
+   * поля приёма (повод, случай обращения) и записи о перевязке с параметрами
+   * лазера теперь хранятся здесь.
+   */
+  appealReason: string;
+  appealCase: string;
+  diagnosisClassification: string;
+  operationType: string;
+  clinicalData: string;
+  dressing: string;
 };
 
 type MedicalRecords = {
@@ -171,6 +185,17 @@ const consultationTypes = [
   "Послеоперационный осмотр",
 ];
 
+/**
+ * Запасные варианты для полей выбора.
+ *
+ * Основной источник — справочник: врач правит варианты на экране
+ * «Справочники», и они сразу появляются в списке. Запасной набор нужен на
+ * случай, когда справочник пуст, — например, шаблон ИБ ещё не загружен.
+ * Значения взяты из «Шаблон ИБ 2026_10» дословно.
+ */
+const appealReasonFallback = ["Лечебно-диагностический", "Консультация", "Диагностический"];
+const appealCaseFallback = ["Первичный", "Повторный"];
+
 const storageKey = "fedorov-medical-records-v1";
 const printTemplatesStorageKey = "clinicbase-print-templates-v1";
 const primaryConsultationType = "Первичная консультация флеболога";
@@ -185,6 +210,8 @@ const printFields: PrintField[] = [
   { key: "visit.ageAtVisit", label: "Полных лет", source: "visit", field: "ageAtVisit" },
   { key: "visit.doctorName", label: "Врач", source: "visit", field: "doctorName" },
   { key: "visit.consultationType", label: "Тип консультации", source: "visit", field: "consultationType" },
+  { key: "visit.appealReason", label: "Повод обращения", source: "visit", field: "appealReason" },
+  { key: "visit.appealCase", label: "Случай обращения", source: "visit", field: "appealCase" },
   { key: "visit.complaints", label: "Жалобы", source: "visit", field: "complaints" },
   { key: "visit.diseaseHistory", label: "Анамнез заболевания", source: "visit", field: "diseaseHistory" },
   { key: "visit.heredity", label: "Наследственность", source: "visit", field: "heredity" },
@@ -207,6 +234,7 @@ const printFields: PrintField[] = [
   { key: "visit.diagnosisMain", label: "Основное заболевание", source: "visit", field: "diagnosisMain" },
   { key: "visit.diagnosisCode", label: "Код МКБ", source: "visit", field: "diagnosisCode" },
   { key: "visit.diagnosisComorbidities", label: "Сопутствующие заболевания", source: "visit", field: "diagnosisComorbidities" },
+  { key: "visit.diagnosisClassification", label: "Классификация диагноза", source: "visit", field: "diagnosisClassification" },
   { key: "visit.regimen", label: "Режим", source: "visit", field: "regimen" },
   { key: "visit.medicationTherapy", label: "Медикаментозная терапия", source: "visit", field: "medicationTherapy" },
   { key: "visit.nonMedicationTherapy", label: "Немедикаментозная терапия", source: "visit", field: "nonMedicationTherapy" },
@@ -215,8 +243,11 @@ const printFields: PrintField[] = [
   { key: "visit.recommendations", label: "Рекомендации", source: "visit", field: "recommendations" },
   { key: "visit.nextVisitDate", label: "Дата следующего визита", source: "visit", field: "nextVisitDate" },
   { key: "visit.manipulationName", label: "Манипуляция: название и локализация", source: "visit", field: "manipulationName" },
+  { key: "visit.operationType", label: "Вид операции", source: "visit", field: "operationType" },
   { key: "visit.manipulationDone", label: "Манипуляция: выполнено", source: "visit", field: "manipulationDone" },
+  { key: "visit.clinicalData", label: "Клинические данные", source: "visit", field: "clinicalData" },
   { key: "visit.manipulationResult", label: "Манипуляция: результат", source: "visit", field: "manipulationResult" },
+  { key: "visit.dressing", label: "Перевязка", source: "visit", field: "dressing" },
   { key: "visit.doctorComment", label: "Комментарии доктора", source: "visit", field: "doctorComment" },
 ];
 
@@ -362,7 +393,34 @@ const emptyVisit = (doctor: DoctorUser, patientId: string): Visit => ({
   manipulationResult: "",
   nextVisitDate: "",
   doctorComment: "",
+  appealReason: "",
+  appealCase: "",
+  diagnosisClassification: "",
+  operationType: "",
+  clinicalData: "",
+  dressing: "",
 });
+
+/**
+ * Пустой приём как образец полей.
+ *
+ * Нужен, чтобы дополнять записи, созданные до появления новых полей: в
+ * localStorage и в базе лежат приёмы без `appealReason` и остальных пяти, а
+ * управляемое поле с `value={undefined}` React считает неуправляемым и ругается.
+ * `emptyVisit` здесь не годится целиком — он подставляет сегодняшнюю дату,
+ * а её нельзя выдумывать для старой записи.
+ */
+const visitFieldDefaults: Visit = emptyVisit(emptyDoctorUser(), "");
+
+const normalizeVisit = (visit: Visit): Visit => {
+  const result = { ...visit };
+  (Object.keys(visitFieldDefaults) as Array<keyof Visit>).forEach((field) => {
+    if (result[field] === undefined) {
+      result[field] = visitFieldDefaults[field] as never;
+    }
+  });
+  return result;
+};
 
 const initialPatients: Patient[] = [
   {
@@ -485,7 +543,10 @@ const loadRecords = () => {
 
   try {
     const parsed = JSON.parse(saved) as { patients: Patient[]; visits: Visit[] };
-    return { ...parsed, visits: mergeVisitsByPatientAndDate(parsed.visits) };
+    return {
+      ...parsed,
+      visits: mergeVisitsByPatientAndDate(parsed.visits.map(normalizeVisit)),
+    };
   } catch {
     return { patients: initialPatients, visits: mergeVisitsByPatientAndDate(initialVisits) };
   }
@@ -850,6 +911,17 @@ const suggestionTextsFor = (entries: DictionaryEntry[], section: string) => {
 };
 
 /**
+ * Варианты для поля выбора: справочник, а если он пуст — запасной набор.
+ *
+ * Именно «если пуст», а не «справочник плюс запасные»: иначе после загрузки
+ * шаблона врач видел бы каждый вариант дважды — свой и встроенный.
+ */
+const choiceOptions = (entries: DictionaryEntry[], section: string, fallback: string[]) => {
+  const fromDictionary = suggestionTextsFor(entries, section);
+  return fromDictionary.length > 0 ? fromDictionary : fallback;
+};
+
+/**
  * Разделы справочника — подписи полей формы.
  *
  * Отдельный список, а не `printFields`: у печатных полей свои названия
@@ -873,6 +945,10 @@ const dictionarySections = Array.from(
     "Адрес",
     "Врач",
     "Консультация врача",
+    // Формальные поля приёма из «Шаблон ИБ 2026_10»: в документе они стоят
+    // рядом с консультацией, и в форме место то же — видно в начале осмотра.
+    "Повод обращения",
+    "Случай обращения",
     "Жалобы",
     "Анамнез заболевания",
     "Наследственность по основному заболеванию",
@@ -894,6 +970,7 @@ const dictionarySections = Array.from(
     "Основное заболевание",
     "Код МКБ",
     "Сопутствующие заболевания",
+    "Классификация диагноза",
     "Режим",
     "Медикаментозная терапия",
     "Немедикаментозная терапия, рекомендованные манипуляции",
@@ -903,8 +980,11 @@ const dictionarySections = Array.from(
     "Дата следующего визита",
     "Комментарии доктора",
     "Название и локализация",
+    "Вид операции",
     "Выполнено",
+    "Клинические данные",
     "Результат",
+    "Перевязка",
   ]),
 );
 
@@ -1472,6 +1552,61 @@ const Field = ({
         onChange={(event) => onChange(event.target.value)}
         className={stacked ? undefined : `h-7 ${valueCellClass}`}
       />
+    </div>
+  );
+};
+
+/**
+ * Поле выбора из справочника.
+ *
+ * «Повод обращения» и «Случай обращения» — формальные поля истории болезни:
+ * значения взаимоисключающие. Свободный текст дал бы «первичный», «Первичный»
+ * и «ПЕРВИЧНЫЙ» в одной базе, а по этим полям потом считают статистику.
+ *
+ * Список берётся из справочника того же раздела, поэтому второй копии нет:
+ * врач правит варианты на экране «Справочники» — список меняется здесь.
+ * Щелчок по подсказке в правой панели тоже ставит значение.
+ */
+const ChoiceField = ({
+  label,
+  value,
+  options,
+  onChange,
+  onActivateSuggestions,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+  onActivateSuggestions?: (target: SuggestionTarget) => void;
+}) => {
+  const selectId = useId();
+  // Значение может быть не из списка: вариант удалили из справочника или он
+  // пришёл из старой записи. Показываем его отдельным пунктом — иначе браузер
+  // молча выберет первый вариант, и подмены никто не заметит.
+  const items = value && !options.includes(value) ? [...options, value] : options;
+
+  return (
+    <div className={rowClass}>
+      <Label htmlFor={selectId} className={labelCellClass}>
+        {label}
+      </Label>
+      <select
+        id={selectId}
+        className={`h-7 ${valueCellClass}`}
+        value={value}
+        onFocus={() =>
+          onActivateSuggestions?.({ label, insert: (suggestion: string) => onChange(suggestion) })
+        }
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="">—</option>
+        {items.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
     </div>
   );
 };
@@ -2398,6 +2533,17 @@ const DoctorDatabase = () => {
     localStorage.setItem(panelWidthStorageKey, String(panelWidth));
   }, [panelWidth]);
 
+  // Варианты для полей выбора. Пересчитываются при правке справочника, поэтому
+  // вариант, добавленный в «Справочниках», сразу виден в форме.
+  const appealReasonOptions = useMemo(
+    () => choiceOptions(dictionaryEntries, "Повод обращения", appealReasonFallback),
+    [dictionaryEntries],
+  );
+  const appealCaseOptions = useMemo(
+    () => choiceOptions(dictionaryEntries, "Случай обращения", appealCaseFallback),
+    [dictionaryEntries],
+  );
+
   // Ширина хранится в пикселях, но окно могло стать уже — не даём панели
   // занять больше половины экрана.
   const panelWidthPx = Math.max(
@@ -2468,7 +2614,14 @@ const DoctorDatabase = () => {
           availableDoctors = doctorsResult.value;
         }
         if (recordsResult.status === "fulfilled") {
-          availableRecords = recordsResult.value as MedicalRecords;
+          const fromServer = recordsResult.value as MedicalRecords;
+          // Дополняем поля, которых у сервера может не быть: пока миграция
+          // 2026-10-25-visits-ib-fields.sql не применена, новые столбцы он не
+          // отдаёт, а поле с `value={undefined}` React считает неуправляемым.
+          availableRecords = {
+            patients: fromServer.patients,
+            visits: fromServer.visits.map(normalizeVisit),
+          };
         }
 
         // Справочники сводим, а не затираем: записи, созданные в офлайне,
@@ -3101,8 +3254,13 @@ const DoctorDatabase = () => {
       foundDoctor = availableDoctors.find((item) => item.id === session.doctorId);
 
       if (recordsResult.status === "fulfilled") {
-        recordsRef.current = recordsResult.value as MedicalRecords;
-        setRecords(recordsResult.value as MedicalRecords);
+        const fromServer = recordsResult.value as MedicalRecords;
+        const normalized = {
+          patients: fromServer.patients,
+          visits: fromServer.visits.map(normalizeVisit),
+        };
+        recordsRef.current = normalized;
+        setRecords(normalized);
       }
       if (
         dictionaryResult.status === "fulfilled" &&
@@ -3794,6 +3952,20 @@ const DoctorDatabase = () => {
                         ))}
                       </select>
                     </div>
+                    <ChoiceField
+                      label="Повод обращения"
+                      value={selectedVisit.appealReason}
+                      options={appealReasonOptions}
+                      onChange={(value) => updateVisit("appealReason", value)}
+                      onActivateSuggestions={activateSuggestionTarget}
+                    />
+                    <ChoiceField
+                      label="Случай обращения"
+                      value={selectedVisit.appealCase}
+                      options={appealCaseOptions}
+                      onChange={(value) => updateVisit("appealCase", value)}
+                      onActivateSuggestions={activateSuggestionTarget}
+                    />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Жалобы" value={selectedVisit.complaints} onChange={(value) => updateVisit("complaints", value)} />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Анамнез заболевания" value={selectedVisit.diseaseHistory} onChange={(value) => updateVisit("diseaseHistory", value)} />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Наследственность по основному заболеванию" value={selectedVisit.heredity} onChange={(value) => updateVisit("heredity", value)} />
@@ -3823,6 +3995,7 @@ const DoctorDatabase = () => {
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Основное заболевание" value={selectedVisit.diagnosisMain} onChange={(value) => updateVisit("diagnosisMain", value)} />
                     <Field onActivateSuggestions={activateSuggestionTarget} label="Код МКБ" value={selectedVisit.diagnosisCode} onChange={(value) => updateVisit("diagnosisCode", value)} />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Сопутствующие заболевания" value={selectedVisit.diagnosisComorbidities} onChange={(value) => updateVisit("diagnosisComorbidities", value)} />
+                    <Area onActivateSuggestions={activateSuggestionTarget} label="Классификация диагноза" value={selectedVisit.diagnosisClassification} onChange={(value) => updateVisit("diagnosisClassification", value)} />
                   </RecordSection>
 
                   <RecordSection title="Назначения и рекомендации">
@@ -3838,8 +4011,11 @@ const DoctorDatabase = () => {
 
                   <RecordSection title="Манипуляции">
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Название и локализация" value={selectedVisit.manipulationName} onChange={(value) => updateVisit("manipulationName", value)} />
+                    <Area onActivateSuggestions={activateSuggestionTarget} label="Вид операции" value={selectedVisit.operationType} onChange={(value) => updateVisit("operationType", value)} />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Выполнено" value={selectedVisit.manipulationDone} onChange={(value) => updateVisit("manipulationDone", value)} />
+                    <Area onActivateSuggestions={activateSuggestionTarget} label="Клинические данные" value={selectedVisit.clinicalData} onChange={(value) => updateVisit("clinicalData", value)} />
                     <Area onActivateSuggestions={activateSuggestionTarget} label="Результат" value={selectedVisit.manipulationResult} onChange={(value) => updateVisit("manipulationResult", value)} />
+                    <Area onActivateSuggestions={activateSuggestionTarget} label="Перевязка" value={selectedVisit.dressing} onChange={(value) => updateVisit("dressing", value)} />
                   </RecordSection>
 
                   <RecordSection title="Печать" defaultOpen={false}>
