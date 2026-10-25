@@ -1,6 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 import {
+  Book,
   BookOpen,
   CalendarDays,
   Check,
@@ -1474,9 +1475,15 @@ const SuggestionPanel = ({
               <Settings className="h-3 w-3" />
             </Button>
           </div>
-          {/* Строки вплотную, без рамок и отступов между ними: в прототипе
-              справочник — это плотный текстовый столбец, а не карточки.
-              На экране 900 px так помещается около 40 записей вместо 12. */}
+          {/* Строки дышат: у каждой подсказки сверху и снизу по 6 px и
+              межстрочный интервал 1,4. Без этого длинная подсказка в 8 строк
+              сливалась с соседней — граница проходила ровно на таком же
+              расстоянии, как между строками внутри одной записи, и глаз не
+              находил, где кончается одна и начинается другая. Плотная сетка
+              из 40 строк на экран была ошибкой: искать нужное стало дольше,
+              чем листать.
+              Книжка перед текстом — из прототипа доктора: она помечает
+              «это подсказка из справочника», а не просто строка списка. */}
           <div className="min-h-0 flex-1 overflow-y-auto">
             {rows.length > 0 ? (
               rows.map(({ node, children, toggleable, open }) => (
@@ -1484,7 +1491,7 @@ const SuggestionPanel = ({
                   <div
                     data-testid="dictionary-row"
                     data-scope={node.entry.scope}
-                    className="group flex items-start border-b border-[#e1e5eb] hover:bg-[#e3e9f2]"
+                    className="group flex items-start gap-1 border-b border-[#dde2e9] py-1.5 hover:bg-[#e3e9f2]"
                   >
                     {hasAnyChildren ? (
                       toggleable ? (
@@ -1497,7 +1504,7 @@ const SuggestionPanel = ({
                               ? `Свернуть подпункты: ${node.text}`
                               : `Раскрыть подпункты: ${node.text}`
                           }
-                          className="w-3.5 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#185fa5] hover:text-[#0c447c]"
+                          className="w-3.5 shrink-0 pt-[1px] text-center text-[11px] leading-[1.4] text-[#185fa5] hover:text-[#0c447c]"
                           onMouseDown={(event) => event.preventDefault()}
                           onClick={() => toggle(node.entry.id)}
                         >
@@ -1509,10 +1516,18 @@ const SuggestionPanel = ({
                         <span className="w-3.5 shrink-0" aria-hidden="true" />
                       )
                     ) : null}
+                    {/* Книжка из прототипа доктора. Закрытая, а не раскрытая:
+                        на 14 px раскрытая книга превращается в две палочки и
+                        не читается — проверено снимком панели. */}
+                    <Book
+                      className="mt-[1px] h-3.5 w-3.5 shrink-0 text-[#7c8a9c]"
+                      strokeWidth={1.8}
+                      aria-hidden="true"
+                    />
                     <button
                       type="button"
                       data-testid="suggestion-pick"
-                      className="min-w-0 flex-1 px-1.5 py-[2px] text-left text-[11px] leading-[1.25]"
+                      className="min-w-0 flex-1 text-left text-[11px] leading-[1.4]"
                       // Цвет приходит из справочника: врач помечает им записи,
                       // которые нельзя перепутать (например, «не выводить
                       // на печать»).
@@ -1532,7 +1547,7 @@ const SuggestionPanel = ({
                     {node.entry.scope === "personal" ? (
                       <button
                         type="button"
-                        className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                        className="w-4 shrink-0 pt-[1px] text-center text-[11px] leading-[1.4] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={() => onDelete(node.entry.short)}
                         aria-label={`Удалить запись: ${node.text}`}
@@ -1552,26 +1567,35 @@ const SuggestionPanel = ({
                           key={child.entry.id}
                           data-testid="suggestion-child"
                           data-scope={child.entry.scope}
-                          className="group flex items-start border-b border-[#e1e5eb] bg-white/50 hover:bg-[#e3e9f2]"
+                          className="group flex items-start gap-1 border-b border-[#e8ecf1] py-1 hover:bg-[#e3e9f2]"
                         >
-                          {hasAnyChildren ? <span className="w-3.5 shrink-0" aria-hidden="true" /> : null}
-                          <button
-                            type="button"
-                            data-testid="suggestion-pick"
-                            // Подпункт отбит вправо и помечен линией: видно,
-                            // что он относится к строке выше, а не сам по себе.
-                            className="min-w-0 flex-1 border-l-2 border-[#cfd7e2] py-[2px] pl-3 pr-1.5 text-left text-[11px] leading-[1.25]"
-                            style={child.entry.color ? { color: child.entry.color } : undefined}
-                            title={child.entry.full || child.text}
-                            onMouseDown={(event) => event.preventDefault()}
-                            onClick={() => onPick(child.text)}
-                          >
-                            {child.text}
-                          </button>
+                          <span className="w-3.5 shrink-0" aria-hidden="true" />
+                          {/* Подпункт отбит вправо и помечен линией: видно,
+                              что он относится к строке выше, а не сам по себе.
+                              Линия стоит на обёртке, а не на кнопке — иначе
+                              она проходила бы между книжкой и текстом. */}
+                          <div className="flex min-w-0 flex-1 items-start gap-1 border-l-2 border-[#cfd7e2] pl-2">
+                            <Book
+                              className="mt-[1px] h-3.5 w-3.5 shrink-0 text-[#9aa6b5]"
+                              strokeWidth={1.8}
+                              aria-hidden="true"
+                            />
+                            <button
+                              type="button"
+                              data-testid="suggestion-pick"
+                              className="min-w-0 flex-1 text-left text-[11px] leading-[1.4]"
+                              style={child.entry.color ? { color: child.entry.color } : undefined}
+                              title={child.entry.full || child.text}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => onPick(child.text)}
+                            >
+                              {child.text}
+                            </button>
+                          </div>
                           {child.entry.scope === "personal" ? (
                             <button
                               type="button"
-                              className="w-4 shrink-0 py-[2px] text-center text-[11px] leading-[1.25] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                              className="w-4 shrink-0 pt-[1px] text-center text-[11px] leading-[1.4] text-[#98a2b3] opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
                               onMouseDown={(event) => event.preventDefault()}
                               onClick={() => onDelete(child.entry.short)}
                               aria-label={`Удалить запись: ${child.text}`}
