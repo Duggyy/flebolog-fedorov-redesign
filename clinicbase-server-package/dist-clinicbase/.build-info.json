@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "3027b1f8790812d2a95a4a1d539a1254cec21105",
-  "shortSha": "3027b1f",
-  "subject": "Поля под шесть разделов шаблона ИБ: 560 записей вместо 530",
-  "builtAt": "2026-10-25T06:55:20.170Z",
-  "dirty": true
+  "sha": "1e8117ac205d21fa5cf1b3fd0bb0d3c13123d899",
+  "shortSha": "1e8117a",
+  "subject": "Пакет ClinicBase: сборка с полями шаблона ИБ",
+  "builtAt": "2026-10-25T06:56:02.226Z",
+  "dirty": false
 }
