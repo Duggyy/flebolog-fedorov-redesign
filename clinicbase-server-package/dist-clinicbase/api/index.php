@@ -693,13 +693,12 @@ function handle_dictionaries_replace(PDO $pdo): never
  * Перестановка записей справочника мышью.
  *
  * Отдельное действие, а не поток `dictionary_save`, по двум причинам. Первая:
- * после перетаскивания перенумеровывается весь раздел (иначе номера подсказок
- * и подпунктов сталкиваются — это уже ломало справочник 26.10.2026), и это
- * десятки записей на одно движение. По одной записи PHP держит сессию
- * заблокированной на каждый запрос, поэтому тридцать запросов выстроились бы
- * в очередь и заодно задержали бы сохранение приёма. Вторая: здесь меняется
- * ТОЛЬКО номер. Текст, цвет и родитель не пересылаются, и перестановка не
- * может затереть чужую правку, сделанную в другом окне.
+ * после перетаскивания перенумеровывается весь раздел, и это десятки записей
+ * на одно движение. По одной записи PHP держит сессию заблокированной на
+ * каждый запрос, поэтому тридцать запросов выстроились бы в очередь и заодно
+ * задержали бы сохранение приёма. Вторая: здесь меняется только номер (и, если
+ * его не было, родитель). Текст и цвет не пересылаются, поэтому перестановка
+ * не может затереть чужую правку, сделанную в другом окне.
  */
 function handle_dictionaries_reorder(PDO $pdo): never
 {
@@ -714,8 +713,11 @@ function handle_dictionaries_reorder(PDO $pdo): never
 
     $pdo->beginTransaction();
     try {
-        $lookup = $pdo->prepare('SELECT doctor_id FROM dictionary_entries WHERE id = ?');
+        $lookup = $pdo->prepare('SELECT doctor_id, section FROM dictionary_entries WHERE id = ?');
         $update = $pdo->prepare('UPDATE dictionary_entries SET sort_order = ? WHERE id = ?');
+        $updateWithParent = $pdo->prepare(
+            'UPDATE dictionary_entries SET sort_order = ?, parent_id = ? WHERE id = ?'
+        );
         $saved = 0;
         foreach ($rawEntries as $raw) {
             if (!is_array($raw)) {
@@ -737,7 +739,32 @@ function handle_dictionaries_reorder(PDO $pdo): never
                 $pdo->rollBack();
                 respond(403, ['error' => 'forbidden']);
             }
-            $update->execute([(int)($raw['order'] ?? 0), $id]);
+
+            $order = (int)($raw['order'] ?? 0);
+            // Родитель приходит только для записей, у которых его не было:
+            // у старого шаблона связь держалась на номерах порядка, и любой
+            // их пересчёт разносил подпункты по чужим строкам.
+            $parentId = array_key_exists('parentId', $raw)
+                ? trim((string)($raw['parentId'] ?? ''))
+                : '';
+            if ($parentId !== '') {
+                $lookup->execute([$parentId]);
+                $parent = $lookup->fetch();
+                $sameSection = $parent && $parent['section'] === $row['section'];
+                $sameOwner = $parent && (string)($parent['doctor_id'] ?? '') === (string)($owner ?? '');
+                if ($parentId === $id || !$sameSection || !$sameOwner) {
+                    // Ссылка на чужой раздел или на себя — портит структуру,
+                    // поэтому родителя просто не записываем, а номер пишем.
+                    $update->execute([$order, $id]);
+                    $saved++;
+                    continue;
+                }
+                $updateWithParent->execute([$order, $parentId, $id]);
+                $saved++;
+                continue;
+            }
+
+            $update->execute([$order, $id]);
             $saved++;
         }
         $pdo->commit();

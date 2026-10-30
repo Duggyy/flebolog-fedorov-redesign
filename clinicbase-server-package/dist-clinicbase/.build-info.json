@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "fef70c33ba6207f28387ae682f3c9ee1b442ee2c",
-  "shortSha": "fef70c3",
-  "subject": "Строки справочника переставляются мышью",
-  "builtAt": "2026-10-30T20:44:41.114Z",
+  "sha": "e47db0fa611e9cf04e9b4f9c06f91ab7b9513797",
+  "shortSha": "e47db0f",
+  "subject": "Перетаскивание больше не разносит справочник",
+  "builtAt": "2026-10-30T21:30:11.379Z",
   "dirty": true
 }
