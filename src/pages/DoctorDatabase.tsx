@@ -3740,7 +3740,7 @@ const DoctorDatabase = () => {
     setWordError("");
     try {
       const imported: DictionaryEntry[] = [];
-      wordImport.sections.forEach((section) => {
+      wordKnownSections.forEach((section) => {
         let lastParentId = "";
         section.entries.forEach((entry, index) => {
           const child = isSuggestionChild(entry.short);
@@ -3759,7 +3759,9 @@ const DoctorDatabase = () => {
         });
       });
       if (imported.length === 0) {
-        setWordError("в документе нет записей");
+        setWordError(
+          "ни один раздел документа не совпал с полями формы, поэтому загружать нечего. Проверьте, что заголовки названы как поля («Жалобы», «Анамнез заболевания» и так далее).",
+        );
         return;
       }
 
@@ -3806,19 +3808,24 @@ const DoctorDatabase = () => {
   /**
    * Разделы файла, которых нет среди полей формы.
    *
-   * Считаем заранее и показываем до загрузки: раздел справочника ищется по
-   * подписи поля, поэтому «Anamnes morbi» из документа ляжет в базу, но в
-   * панели подсказок не появится. Молча — худший вариант: врач загрузит файл,
-   * увидит пустую панель и решит, что справочник пропал.
+   * Такие разделы НЕ загружаем, и вот почему. Раздел справочника ищется по
+   * подписи поля: «Anamnes morbi» из документа ляжет в базу, но в панели
+   * подсказок не появится никогда. Пятьсот записей в невидимых разделах —
+   * это не «на всякий случай», это мусор, который потом уедет обратно в
+   * выгрузку и будет путать. Лучше сказать заранее и не писать.
    */
+  const wordKnownSections = wordImport
+    ? wordImport.sections.filter((section) => dictionarySections.includes(section.title))
+    : [];
   const wordUnknownSections = wordImport
     ? wordImport.sections
         .map((section) => section.title)
         .filter((title) => !dictionarySections.includes(title))
     : [];
-  const wordEntryCount = wordImport
-    ? wordImport.sections.reduce((sum, section) => sum + section.entries.length, 0)
-    : 0;
+  const wordEntryCount = wordKnownSections.reduce(
+    (sum, section) => sum + section.entries.length,
+    0,
+  );
 
   const activateSuggestionTarget = (target: SuggestionTarget) => {
     setActiveSuggestionTarget(target);
@@ -5029,7 +5036,7 @@ const DoctorDatabase = () => {
             <div className="max-h-[46vh] space-y-1.5 overflow-y-auto text-[11px] leading-snug">
               <p>
                 <span className="font-semibold">{wordEntryCount}</span> записей в{" "}
-                {wordImport.sections.length} разделах.
+                {wordKnownSections.length} разделах.
               </p>
               <p className="text-muted-foreground">
                 Строки с дефисом в начале станут подпунктами предыдущей подсказки, разделитель «|»
@@ -5038,12 +5045,13 @@ const DoctorDatabase = () => {
               {wordUnknownSections.length > 0 ? (
                 <div className="rounded-sm border border-amber-300 bg-amber-50 p-2 text-amber-900">
                   <p className="font-semibold">
-                    {wordUnknownSections.length} разделов не совпадают с полями формы:
+                    {wordUnknownSections.length} разделов не загружаются — их нет среди полей формы:
                   </p>
                   <p className="mt-0.5 break-words">{wordUnknownSections.join(", ")}</p>
                   <p className="mt-1">
-                    Они попадут в базу, но в панели подсказок не появятся — раздел ищется по
-                    подписи поля. Проверьте, что заголовки в документе названы как поля формы.
+                    Раздел справочника ищется по подписи поля, поэтому такие записи не появились бы
+                    в панели подсказок. Если раздел нужен — назовите заголовок в документе так же,
+                    как называется поле формы.
                   </p>
                 </div>
               ) : null}
