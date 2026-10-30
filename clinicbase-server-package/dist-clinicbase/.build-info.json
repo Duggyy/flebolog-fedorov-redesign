@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "e47db0fa611e9cf04e9b4f9c06f91ab7b9513797",
-  "shortSha": "e47db0f",
-  "subject": "Перетаскивание больше не разносит справочник",
-  "builtAt": "2026-10-30T21:30:11.379Z",
+  "sha": "b937ff1721a4ecf6fa0e7b774b93b4e8f6b25d68",
+  "shortSha": "b937ff1",
+  "subject": "Справочник выгружается в Word и читается обратно",
+  "builtAt": "2026-10-30T22:59:31.796Z",
   "dirty": true
 }
