@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "2af93f37b1956f33f2c7ae7a504d3d7e92c55cb9",
-  "shortSha": "2af93f3",
-  "subject": "Подпункты справочника держатся за parentId, а не за соседство строк",
-  "builtAt": "2026-10-25T21:41:23.415Z",
+  "sha": "fef70c33ba6207f28387ae682f3c9ee1b442ee2c",
+  "shortSha": "fef70c3",
+  "subject": "Строки справочника переставляются мышью",
+  "builtAt": "2026-10-30T20:44:41.114Z",
   "dirty": true
 }

@@ -66,6 +66,7 @@ try {
         'dictionary_delete' => handle_dictionary_delete($pdo),
         'dictionaries_import' => handle_dictionaries_import($pdo),
         'dictionaries_replace' => handle_dictionaries_replace($pdo),
+        'dictionaries_reorder' => handle_dictionaries_reorder($pdo),
         default => respond(404, ['error' => 'unknown_action']),
     };
 } catch (Throwable $error) {
@@ -683,6 +684,66 @@ function handle_dictionaries_replace(PDO $pdo): never
         // остались бы удалённые общие записи и ни одной новой.
         $pdo->rollBack();
         respond(500, ['error' => 'replace_failed', 'message' => $error->getMessage()]);
+    }
+
+    respond(200, ['ok' => true, 'saved' => $saved]);
+}
+
+/**
+ * Перестановка записей справочника мышью.
+ *
+ * Отдельное действие, а не поток `dictionary_save`, по двум причинам. Первая:
+ * после перетаскивания перенумеровывается весь раздел (иначе номера подсказок
+ * и подпунктов сталкиваются — это уже ломало справочник 26.10.2026), и это
+ * десятки записей на одно движение. По одной записи PHP держит сессию
+ * заблокированной на каждый запрос, поэтому тридцать запросов выстроились бы
+ * в очередь и заодно задержали бы сохранение приёма. Вторая: здесь меняется
+ * ТОЛЬКО номер. Текст, цвет и родитель не пересылаются, и перестановка не
+ * может затереть чужую правку, сделанную в другом окне.
+ */
+function handle_dictionaries_reorder(PDO $pdo): never
+{
+    require_logged_in();
+    $rawEntries = read_json()['entries'] ?? [];
+    if (!is_array($rawEntries)) {
+        respond(422, ['error' => 'invalid_entries']);
+    }
+
+    $isAdmin = ($_SESSION['role'] ?? '') === 'admin';
+    $doctorId = $isAdmin ? null : (string)($_SESSION['doctor_id'] ?? '');
+
+    $pdo->beginTransaction();
+    try {
+        $lookup = $pdo->prepare('SELECT doctor_id FROM dictionary_entries WHERE id = ?');
+        $update = $pdo->prepare('UPDATE dictionary_entries SET sort_order = ? WHERE id = ?');
+        $saved = 0;
+        foreach ($rawEntries as $raw) {
+            if (!is_array($raw)) {
+                continue;
+            }
+            $id = trim((string)($raw['id'] ?? ''));
+            if ($id === '') {
+                continue;
+            }
+            $lookup->execute([$id]);
+            $row = $lookup->fetch();
+            if (!$row) {
+                // Запись удалили в другом окне. Это не повод ронять всю
+                // перестановку: остальные строки должны встать на место.
+                continue;
+            }
+            $owner = $row['doctor_id'];
+            if (!$isAdmin && $owner !== null && (string)$owner !== $doctorId) {
+                $pdo->rollBack();
+                respond(403, ['error' => 'forbidden']);
+            }
+            $update->execute([(int)($raw['order'] ?? 0), $id]);
+            $saved++;
+        }
+        $pdo->commit();
+    } catch (Throwable $error) {
+        $pdo->rollBack();
+        respond(500, ['error' => 'reorder_failed', 'message' => $error->getMessage()]);
     }
 
     respond(200, ['ok' => true, 'saved' => $saved]);
