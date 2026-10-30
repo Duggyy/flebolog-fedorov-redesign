@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "20544e1d047c42c6b2bf6bb2aff6dac9fd0c0845",
-  "shortSha": "20544e1",
-  "subject": "Раздел вне формы не попадает в справочник при загрузке из Word",
-  "builtAt": "2026-10-30T23:08:52.286Z",
+  "sha": "be737ff1a742d627553ce4e5c416b9002ac92b13",
+  "shortSha": "be737ff",
+  "subject": "Пакет ClinicBase: сборка с загрузкой справочника из Word",
+  "builtAt": "2026-10-30T23:11:13.531Z",
   "dirty": true
 }
