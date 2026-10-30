@@ -11,6 +11,7 @@ import {
   Download,
   FileDown,
   FileText,
+  FileUp,
   GripVertical,
   Info,
   Pencil,
@@ -63,6 +64,12 @@ import {
   isApiUnavailable,
 } from "@/lib/clinicbase-api";
 import { describeServerFailure, serverProblemHint } from "@/lib/clinicbase-errors";
+import {
+  buildDictionaryDocx,
+  DOCX_MIME,
+  parseDictionaryDocx,
+  type DictionaryDocSection,
+} from "@/lib/dictionary-docx";
 import { DoctorUser, emptyDoctorUser, initialDoctors, loadDoctorUsers } from "@/lib/doctor-users";
 
 type Patient = {
@@ -3027,6 +3034,18 @@ const DoctorDatabase = () => {
   const [templateBusy, setTemplateBusy] = useState(false);
   const [templateError, setTemplateError] = useState("");
   const [templateBackup, setTemplateBackup] = useState<TemplateBackup | null>(loadTemplateBackup);
+  // Загрузка справочника из файла Word. Отдельно от шаблона ИБ, потому что
+  // файл выбирает врач: показываем, что прочиталось из его документа, до того
+  // как что-то попадёт в базу.
+  const [wordDialogOpen, setWordDialogOpen] = useState(false);
+  const [wordImport, setWordImport] = useState<{
+    name: string;
+    sections: DictionaryDocSection[];
+    warnings: string[];
+  } | null>(null);
+  const [wordBusy, setWordBusy] = useState(false);
+  const [wordError, setWordError] = useState("");
+  const wordInputRef = useRef<HTMLInputElement | null>(null);
   const recordsRef = useRef(records);
   const dictionaryRef = useRef(dictionaryEntries);
   const pendingActionRef = useRef<((sourceRecords: MedicalRecords) => void) | null>(null);
@@ -3602,6 +3621,204 @@ const DoctorDatabase = () => {
       description: `На сервере шаблон остался: ${revertError}. Пункт «Отменить загрузку шаблона» остался в меню — попробуйте ещё раз.`,
     });
   };
+
+  /**
+   * Выгрузка справочника в Word.
+   *
+   * Подпункт определяем по `parentId`, а не по дефису в тексте: запись,
+   * созданная в панели, дефиса не содержит — его срезает `stripSuggestionDash`
+   * при показе. Если писать текст как есть, такие подпункты уехали бы в файл
+   * обычными подсказками, и иерархия потерялась бы уже при выгрузке. Дефис
+   * добавляем только для файла — в базе он остаётся разметкой, а не текстом.
+   */
+  const exportDictionariesWord = async () => {
+    const grouped = new Map<string, DictionaryDocSection>();
+    const sorted = [...dictionaryEntries].sort((left, right) => left.order - right.order);
+    for (const entry of sorted) {
+      const bucket = grouped.get(entry.section) ?? { title: entry.section, entries: [] };
+      grouped.set(entry.section, bucket);
+      const needsDash = Boolean(entry.parentId) && !isSuggestionChild(entry.short);
+      bucket.entries.push({
+        short: needsDash ? `-${entry.short}` : entry.short,
+        full: entry.full,
+        color: entry.color,
+      });
+    }
+
+    const sections = [...grouped.values()];
+    const total = sections.reduce((sum, section) => sum + section.entries.length, 0);
+    if (total === 0) {
+      toast({
+        variant: "destructive",
+        title: "Справочник пуст",
+        description: "Выгружать нечего: сначала загрузите шаблон или добавьте записи.",
+      });
+      return;
+    }
+
+    const bytes = buildDictionaryDocx(sections, "Справочник подсказок");
+    const blob = new Blob([bytes as unknown as BlobPart], { type: DOCX_MIME });
+    const fileName = `Справочник_${new Date().toISOString().slice(0, 10)}.docx`;
+    const saveFilePicker = (window as WindowWithSaveFilePicker).showSaveFilePicker;
+
+    if (saveFilePicker) {
+      try {
+        const handle = await saveFilePicker({
+          id: "clinicbase-dictionary-word",
+          suggestedName: fileName,
+          types: [{ description: "Документ Word", accept: { [DOCX_MIME]: [".docx"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        toast({
+          title: "Справочник сохранён",
+          description: `${total} записей в ${sections.length} разделах.`,
+        });
+        return;
+      } catch (error) {
+        // Закрытие окна выбора папки — не ошибка: врач передумал.
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        toast({
+          title: "Не удалось открыть выбор папки",
+          description: "Файл будет сохранён как обычная загрузка.",
+        });
+      }
+    }
+
+    downloadWordFile(blob, fileName);
+    toast({
+      title: "Справочник сохранён",
+      description: `${total} записей в ${sections.length} разделах.`,
+    });
+  };
+
+  const openWordImport = () => {
+    setWordError("");
+    setWordImport(null);
+    wordInputRef.current?.click();
+  };
+
+  /**
+   * Чтение выбранного файла.
+   *
+   * Диалог открываем сразу, ещё до разбора: разбор большого документа занимает
+   * мгновение, но если файл не от Word, врач должен увидеть это в том же окне,
+   * где ждал результат, а не в молча закрывшемся выборе файла.
+   */
+  const readWordImport = async (file: File) => {
+    setWordBusy(true);
+    setWordError("");
+    setWordImport(null);
+    setWordDialogOpen(true);
+    try {
+      const parsed = await parseDictionaryDocx(await file.arrayBuffer());
+      if (parsed.sections.length === 0) {
+        setWordError(
+          "в документе нет ни одного раздела. Нужен файл, где названия разделов выделены жирным — как в шаблоне ИБ.",
+        );
+        return;
+      }
+      setWordImport({ name: file.name, sections: parsed.sections, warnings: parsed.warnings });
+    } catch (error) {
+      setWordError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setWordBusy(false);
+    }
+  };
+
+  /**
+   * Запись прочитанного документа в «Общие».
+   *
+   * Заменяет общие записи целиком, как и загрузка шаблона: файл Word — это
+   * справочник клиники, а не добавка к нему. Копия прежнего состояния
+   * сохраняется, поэтому отмена та же — в меню «Справочники».
+   */
+  const applyWordImport = async () => {
+    if (!wordImport) return;
+    setWordBusy(true);
+    setWordError("");
+    try {
+      const imported: DictionaryEntry[] = [];
+      wordImport.sections.forEach((section) => {
+        let lastParentId = "";
+        section.entries.forEach((entry, index) => {
+          const child = isSuggestionChild(entry.short);
+          const id = stableId("global", section.title, `${index}:${entry.short}`);
+          imported.push({
+            id,
+            section: section.title,
+            short: entry.short,
+            full: entry.full,
+            color: entry.color,
+            parentId: child ? lastParentId : "",
+            order: index,
+            scope: "global",
+          });
+          if (!child) lastParentId = id;
+        });
+      });
+      if (imported.length === 0) {
+        setWordError("в документе нет записей");
+        return;
+      }
+
+      const current = dictionaryRef.current;
+      const backup: TemplateBackup = {
+        at: new Date().toISOString(),
+        version: wordImport.name,
+        entries: current,
+      };
+      localStorage.setItem(templateBackupStorageKey, JSON.stringify(backup));
+      setTemplateBackup(backup);
+
+      mutateDictionaries(() => [...current.filter((entry) => entry.scope === "personal"), ...imported]);
+
+      let savedOnServer = false;
+      let saveError = "";
+      try {
+        await apiReplaceGlobalDictionaries(imported);
+        savedOnServer = true;
+      } catch (error) {
+        saveError = describeServerFailure(error);
+      }
+
+      setWordDialogOpen(false);
+      if (savedOnServer) {
+        toast({
+          title: "Справочник загружен из Word",
+          description: `${imported.length} записей в «Общие». Отменить — в меню «Справочники».`,
+        });
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Справочник загружен только в этом браузере",
+          description: `На сервер сохранить не удалось: ${saveError}. Записи видны сейчас, но пропадут при входе с другого компьютера.`,
+        });
+      }
+    } catch (error) {
+      setWordError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setWordBusy(false);
+    }
+  };
+
+  /**
+   * Разделы файла, которых нет среди полей формы.
+   *
+   * Считаем заранее и показываем до загрузки: раздел справочника ищется по
+   * подписи поля, поэтому «Anamnes morbi» из документа ляжет в базу, но в
+   * панели подсказок не появится. Молча — худший вариант: врач загрузит файл,
+   * увидит пустую панель и решит, что справочник пропал.
+   */
+  const wordUnknownSections = wordImport
+    ? wordImport.sections
+        .map((section) => section.title)
+        .filter((title) => !dictionarySections.includes(title))
+    : [];
+  const wordEntryCount = wordImport
+    ? wordImport.sections.reduce((sum, section) => sum + section.entries.length, 0)
+    : 0;
 
   const activateSuggestionTarget = (target: SuggestionTarget) => {
     setActiveSuggestionTarget(target);
@@ -4183,7 +4400,11 @@ const DoctorDatabase = () => {
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(url);
+    // Отзываем не сразу: `click()` только ставит загрузку в очередь, и если
+    // освободить адрес в том же такте, Chromium успевает отменить её — файл
+    // молча не появляется. Проверено на выгрузке справочника: щелчок есть,
+    // ошибок нет, файла нет.
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
   };
 
   const exportWordFile = async () => {
@@ -4376,6 +4597,29 @@ const DoctorDatabase = () => {
                 >
                   <Printer className="mr-2 h-3.5 w-3.5" />
                   Печать
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                {/* Word — это файл, а не сервер: врач может отдать справочник
+                    коллеге, поправить формулировки в Word и вернуть обратно.
+                    Поэтому выгрузка и загрузка стоят рядом и отделены от
+                    «Шаблона ИБ», который берётся из сборки, а не с диска. */}
+                <DropdownMenuItem
+                  data-testid="dictionary-menu-export-word"
+                  onSelect={() => {
+                    void exportDictionariesWord();
+                  }}
+                  className="text-[11px]"
+                >
+                  <FileDown className="mr-2 h-3.5 w-3.5" />
+                  Выгрузить в Word
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  data-testid="dictionary-menu-import-word"
+                  onSelect={openWordImport}
+                  className="text-[11px]"
+                >
+                  <FileUp className="mr-2 h-3.5 w-3.5" />
+                  Загрузить из Word
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -4742,6 +4986,109 @@ const DoctorDatabase = () => {
               }}
             >
               {templateBusy ? "Загружаю…" : "Загрузить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Скрытый выбор файла: кнопка меню открывает его программно, потому что
+          пункт меню — не <label>, и связать их без лишней обёртки нечем. */}
+      <input
+        ref={wordInputRef}
+        type="file"
+        accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        className="hidden"
+        data-testid="dictionary-word-input"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          // Сбрасываем значение: иначе повторный выбор того же файла не вызовет
+          // onChange, и врач решит, что кнопка не работает.
+          event.target.value = "";
+          if (file) void readWordImport(file);
+        }}
+      />
+
+      <Dialog open={wordDialogOpen} onOpenChange={setWordDialogOpen}>
+        <DialogContent className="max-w-[520px]" data-testid="dictionary-word-dialog">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="text-base">Загрузить справочник из Word</DialogTitle>
+            <DialogDescription className="text-[11px] leading-snug">
+              {wordImport
+                ? `Файл «${wordImport.name}». Записи встанут в «Общие», прежние общие заменятся. Личные останутся как были.`
+                : "Выберите файл .docx, выгруженный из этой программы или присланный врачом."}
+            </DialogDescription>
+          </DialogHeader>
+
+          {wordError ? (
+            <p className="rounded-sm border border-destructive/40 bg-destructive/5 p-2 text-[11px] leading-snug text-destructive">
+              Не удалось прочитать документ: {wordError}
+            </p>
+          ) : wordBusy ? (
+            <p className="text-[11px] text-muted-foreground">Читаю документ…</p>
+          ) : wordImport ? (
+            <div className="max-h-[46vh] space-y-1.5 overflow-y-auto text-[11px] leading-snug">
+              <p>
+                <span className="font-semibold">{wordEntryCount}</span> записей в{" "}
+                {wordImport.sections.length} разделах.
+              </p>
+              <p className="text-muted-foreground">
+                Строки с дефисом в начале станут подпунктами предыдущей подсказки, разделитель «|»
+                отделяет полный текст, цвет шрифта сохранится.
+              </p>
+              {wordUnknownSections.length > 0 ? (
+                <div className="rounded-sm border border-amber-300 bg-amber-50 p-2 text-amber-900">
+                  <p className="font-semibold">
+                    {wordUnknownSections.length} разделов не совпадают с полями формы:
+                  </p>
+                  <p className="mt-0.5 break-words">{wordUnknownSections.join(", ")}</p>
+                  <p className="mt-1">
+                    Они попадут в базу, но в панели подсказок не появятся — раздел ищется по
+                    подписи поля. Проверьте, что заголовки в документе названы как поля формы.
+                  </p>
+                </div>
+              ) : null}
+              {wordImport.warnings.length > 0 ? (
+                <div className="rounded-sm border border-[#c6ced9] bg-[#f4f6f9] p-2">
+                  <p className="font-semibold">Пропущено:</p>
+                  <ul className="mt-0.5 list-disc pl-4">
+                    {wordImport.warnings.slice(0, 6).map((warning) => (
+                      <li key={warning}>{warning}</li>
+                    ))}
+                  </ul>
+                  {wordImport.warnings.length > 6 ? (
+                    <p className="mt-0.5 text-muted-foreground">
+                      и ещё {wordImport.warnings.length - 6}
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+              <p className="text-muted-foreground">
+                Если ляжет не так — отмена там же, в меню «Справочники».
+              </p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">Файл не выбран.</p>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-[11px]"
+              onClick={() => setWordDialogOpen(false)}
+            >
+              Отмена
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 text-[11px]"
+              data-testid="dictionary-word-apply"
+              disabled={wordBusy || !wordImport}
+              onClick={() => {
+                void applyWordImport();
+              }}
+            >
+              {wordBusy ? "Загружаю…" : "Загрузить"}
             </Button>
           </DialogFooter>
         </DialogContent>
