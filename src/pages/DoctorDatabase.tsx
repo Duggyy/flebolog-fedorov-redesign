@@ -931,7 +931,11 @@ type SuggestionNode = {
 /** Итог перестановки: новые записи и то, что изменилось (уходит на сервер). */
 type SiblingReorder = {
   entries: DictionaryEntry[];
-  changed: Array<{ id: string; order: number }>;
+  /**
+   * `parentId` есть только у тех подпунктов, которым родитель записывается
+   * впервые: у старых записей он пуст, и связь держалась на номерах порядка.
+   */
+  changed: Array<{ id: string; order: number; parentId?: string }>;
 };
 
 /**
@@ -991,16 +995,24 @@ const buildSuggestionTree = (entries: DictionaryEntry[]): SuggestionNode[] => {
  * внутри своей подсказки.
  *
  * `levelKey` — это `""` для верхнего уровня и id подсказки для её подпунктов.
- * Уровень берётся из того же `buildSuggestionTree`, что и показ на экране:
- * если бы нумерация считала уровни по-своему, запись могла бы встать в один
- * список, а показаться в другом.
+ * Уровень берётся из того же `buildSuggestionTree`, что и показ на экране.
  *
- * Номера после перестановки пересчитываются по всему разделу подряд —
- * «подсказка, её подпункты, следующая подсказка». Не только ради красоты:
- * подсказки и подпункты живут в одном разделе, и если каждому уровню считать
- * номера с нуля, они столкнутся. 26.10.2026 ровно это разложило годы стажа
- * «Считает себя больной более» по чужим строкам. Побочная выгода: одно
- * перетаскивание чинит уже испорченные номера во всём разделе.
+ * Новый порядок собирается сразу, одним проходом: «подсказка, её подпункты,
+ * следующая подсказка». Никаких промежуточных номеров.
+ *
+ * ⚠️ 31.10.2026 здесь был именно промежуточный шаг, и он разносил справочник.
+ * Каждому уровню выдавались номера с нуля (подсказкам 0…n, подпунктам 0…m),
+ * они сталкивались, раздел пересортировывался по этим совпадающим номерам, и
+ * подпункты, у которых `parentId` пустой, привязывались правилом «дефисная
+ * строка относится к ближайшей выше подсказке» к ЧУЖИМ строкам. В живой базе
+ * `parentId` пуст у всех 280 дефисных строк (шаблон грузили до 26.10, когда
+ * поле ещё не заполнялось), поэтому одно перетаскивание разваливало раздел
+ * целиком: «-Считает себя больным более» уезжал выше своей подсказки, а годы
+ * стажа разлетались между чужими записями.
+ *
+ * Заодно перестановка записывает родителя тем подпунктам, у которых его нет,
+ * — ровно того, кто и так был их родителем на экране. Структура перестаёт
+ * зависеть от совпадения номеров.
  */
 const reorderSiblings = (
   entries: DictionaryEntry[],
@@ -1012,48 +1024,66 @@ const reorderSiblings = (
   const inSection = entries.filter(
     (entry) => entry.section === section && entry.scope === scope,
   );
+  // Дерево — это то, что врач видит на экране. Из него и берётся структура.
   const tree = buildSuggestionTree(inSection);
-  const levelIds =
-    levelKey === ""
-      ? tree.map((node) => node.entry.id)
-      : (tree.find((node) => node.entry.id === levelKey)?.children.map(
-          (child) => child.entry.id,
-        ) ?? null);
+  const roots = tree.map((node) => node.entry.id);
+  const childrenOf = new Map(
+    tree.map((node) => [node.entry.id, node.children.map((child) => child.entry.id)]),
+  );
 
+  const levelIds = levelKey === "" ? roots : (childrenOf.get(levelKey) ?? null);
   if (!levelIds || levelIds.length < 2 || levelIds.length !== orderedIds.length) return null;
   const known = new Set(levelIds);
   if (!orderedIds.every((id) => known.has(id))) return null;
 
-  // Промежуточный номер — место в новом списке. Он нужен только для того,
-  // чтобы разложить раздел в нужной последовательности; окончательные номера
-  // выдаются ниже, подряд по всему разделу.
-  const rank = new Map(orderedIds.map((id, index) => [id, index]));
-  const staged = entries.map((entry) =>
-    rank.has(entry.id) ? { ...entry, order: rank.get(entry.id) as number } : entry,
-  );
-
-  const byOrder = (a: DictionaryEntry, b: DictionaryEntry) =>
-    a.order - b.order || a.short.localeCompare(b.short, "ru");
-  const stagedSection = staged
-    .filter((entry) => entry.section === section && entry.scope === scope)
-    .sort(byOrder);
-
   const flat: string[] = [];
-  buildSuggestionTree(stagedSection).forEach((node) => {
-    flat.push(node.entry.id);
-    node.children.forEach((child) => flat.push(child.entry.id));
+  const impliedParent = new Map<string, string>();
+  const rootOrder = levelKey === "" ? orderedIds : roots;
+  for (const rootId of rootOrder) {
+    flat.push(rootId);
+    const kids = levelKey === rootId ? orderedIds : (childrenOf.get(rootId) ?? []);
+    for (const id of kids) {
+      flat.push(id);
+      impliedParent.set(id, rootId);
+    }
+  }
+  // Записи, которых дерево не показало (битый parentId на чужой раздел), не
+  // теряем: дописываем в конец, но номер им всё равно нужен.
+  const placed = new Set(flat);
+  inSection.forEach((entry) => {
+    if (!placed.has(entry.id)) {
+      flat.push(entry.id);
+      placed.add(entry.id);
+    }
   });
 
   const orderById = new Map(flat.map((id, index) => [id, index]));
+  const byId = new Map(inSection.map((entry) => [entry.id, entry]));
   const before = new Map(entries.map((entry) => [entry.id, entry.order]));
 
+  const changed: SiblingReorder["changed"] = [];
+  for (const id of flat) {
+    const order = orderById.get(id) as number;
+    const entry = byId.get(id);
+    if (!entry) continue;
+    const parent = impliedParent.get(id);
+    // Родителя пишем только тем, у кого его нет: чужую связь не перебиваем.
+    const nextParent = parent && !entry.parentId ? parent : undefined;
+    if (before.get(id) === order && nextParent === undefined) continue;
+    changed.push(nextParent ? { id, order, parentId: nextParent } : { id, order });
+  }
+
   return {
-    entries: entries.map((entry) =>
-      orderById.has(entry.id) ? { ...entry, order: orderById.get(entry.id) as number } : entry,
-    ),
-    changed: flat
-      .map((id) => ({ id, order: orderById.get(id) as number }))
-      .filter((item) => before.get(item.id) !== item.order),
+    entries: entries.map((entry) => {
+      if (!orderById.has(entry.id)) return entry;
+      const parent = impliedParent.get(entry.id);
+      return {
+        ...entry,
+        order: orderById.get(entry.id) as number,
+        parentId: entry.parentId || parent || "",
+      };
+    }),
+    changed,
   };
 };
 
