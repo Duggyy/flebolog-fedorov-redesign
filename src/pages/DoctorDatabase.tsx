@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, ReactNode } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import {
   Book,
   BookOpen,
@@ -11,6 +11,7 @@ import {
   Download,
   FileDown,
   FileText,
+  GripVertical,
   Info,
   Pencil,
   Plus,
@@ -55,6 +56,7 @@ import {
   apiGetSession,
   apiImportDictionaryEntries,
   apiLogin,
+  apiReorderDictionaryEntries,
   apiReplaceGlobalDictionaries,
   apiSaveDictionaryEntry,
   apiSaveRecords,
@@ -926,6 +928,12 @@ type SuggestionNode = {
   children: Array<{ entry: DictionaryEntry; text: string }>;
 };
 
+/** Итог перестановки: новые записи и то, что изменилось (уходит на сервер). */
+type SiblingReorder = {
+  entries: DictionaryEntry[];
+  changed: Array<{ id: string; order: number }>;
+};
+
 /**
  * Разбор раздела на подсказки и их подпункты.
  *
@@ -976,6 +984,77 @@ const buildSuggestionTree = (entries: DictionaryEntry[]): SuggestionNode[] => {
   }
 
   return roots;
+};
+
+/**
+ * Перестановка записей одного уровня — подсказки между собой или подпункты
+ * внутри своей подсказки.
+ *
+ * `levelKey` — это `""` для верхнего уровня и id подсказки для её подпунктов.
+ * Уровень берётся из того же `buildSuggestionTree`, что и показ на экране:
+ * если бы нумерация считала уровни по-своему, запись могла бы встать в один
+ * список, а показаться в другом.
+ *
+ * Номера после перестановки пересчитываются по всему разделу подряд —
+ * «подсказка, её подпункты, следующая подсказка». Не только ради красоты:
+ * подсказки и подпункты живут в одном разделе, и если каждому уровню считать
+ * номера с нуля, они столкнутся. 26.10.2026 ровно это разложило годы стажа
+ * «Считает себя больной более» по чужим строкам. Побочная выгода: одно
+ * перетаскивание чинит уже испорченные номера во всём разделе.
+ */
+const reorderSiblings = (
+  entries: DictionaryEntry[],
+  section: string,
+  scope: DictionaryScope,
+  levelKey: string,
+  orderedIds: string[],
+): SiblingReorder | null => {
+  const inSection = entries.filter(
+    (entry) => entry.section === section && entry.scope === scope,
+  );
+  const tree = buildSuggestionTree(inSection);
+  const levelIds =
+    levelKey === ""
+      ? tree.map((node) => node.entry.id)
+      : (tree.find((node) => node.entry.id === levelKey)?.children.map(
+          (child) => child.entry.id,
+        ) ?? null);
+
+  if (!levelIds || levelIds.length < 2 || levelIds.length !== orderedIds.length) return null;
+  const known = new Set(levelIds);
+  if (!orderedIds.every((id) => known.has(id))) return null;
+
+  // Промежуточный номер — место в новом списке. Он нужен только для того,
+  // чтобы разложить раздел в нужной последовательности; окончательные номера
+  // выдаются ниже, подряд по всему разделу.
+  const rank = new Map(orderedIds.map((id, index) => [id, index]));
+  const staged = entries.map((entry) =>
+    rank.has(entry.id) ? { ...entry, order: rank.get(entry.id) as number } : entry,
+  );
+
+  const byOrder = (a: DictionaryEntry, b: DictionaryEntry) =>
+    a.order - b.order || a.short.localeCompare(b.short, "ru");
+  const stagedSection = staged
+    .filter((entry) => entry.section === section && entry.scope === scope)
+    .sort(byOrder);
+
+  const flat: string[] = [];
+  buildSuggestionTree(stagedSection).forEach((node) => {
+    flat.push(node.entry.id);
+    node.children.forEach((child) => flat.push(child.entry.id));
+  });
+
+  const orderById = new Map(flat.map((id, index) => [id, index]));
+  const before = new Map(entries.map((entry) => [entry.id, entry.order]));
+
+  return {
+    entries: entries.map((entry) =>
+      orderById.has(entry.id) ? { ...entry, order: orderById.get(entry.id) as number } : entry,
+    ),
+    changed: flat
+      .map((id) => ({ id, order: orderById.get(id) as number }))
+      .filter((item) => before.get(item.id) !== item.order),
+  };
 };
 
 /**
@@ -1324,6 +1403,49 @@ const SchedulePanel = ({
   );
 };
 
+/**
+ * Ручка перетаскивания строки справочника.
+ *
+ * Отдельная кнопка, а не вся строка: строка — это кнопка вставки текста, и
+ * если тянуть её саму, то дрогнувшая при вставке рука меняла бы порядок в
+ * общем справочнике клиники. Ручка мелкая и неяркая, но видна всегда: спрячь
+ * её до наведения — и о перетаскивании никто не догадается.
+ */
+const DragHandle = ({
+  label,
+  disabled,
+  onStart,
+  onMove,
+  onEnd,
+}: {
+  label: string;
+  disabled: boolean;
+  onStart: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+  onEnd: (event: ReactPointerEvent<HTMLButtonElement>) => void;
+}) => (
+  <button
+    type="button"
+    data-testid="suggestion-grip"
+    aria-label={`Переставить: ${label}`}
+    title={
+      disabled
+        ? "Во время поиска порядок строк не меняется"
+        : "Перетащите строку выше или ниже"
+    }
+    disabled={disabled}
+    // touch-none обязателен: иначе на планшете жест уйдёт в прокрутку списка,
+    // и строка не сдвинется.
+    className="mt-[1px] w-3.5 shrink-0 cursor-grab touch-none text-[#c2cad4] transition-colors hover:text-[#5a6675] active:cursor-grabbing disabled:cursor-not-allowed disabled:text-[#e2e7ed]"
+    onPointerDown={onStart}
+    onPointerMove={onMove}
+    onPointerUp={onEnd}
+    onPointerCancel={onEnd}
+  >
+    <GripVertical className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden="true" />
+  </button>
+);
+
 const SuggestionPanel = ({
   label,
   entries,
@@ -1334,6 +1456,7 @@ const SuggestionPanel = ({
   onAdd,
   onDelete,
   onPick,
+  onReorder,
   onClose,
   onOpenDictionaries,
 }: {
@@ -1347,6 +1470,8 @@ const SuggestionPanel = ({
   onAdd: () => void;
   onDelete: (value: string) => void;
   onPick: (value: string) => void;
+  /** `""` — верхний уровень, id подсказки — её подпункты. */
+  onReorder: (levelKey: string, orderedIds: string[]) => void;
   onClose: () => void;
   onOpenDictionaries: () => void;
 }) => {
@@ -1411,6 +1536,170 @@ const SuggestionPanel = ({
   // видны сразу; убрать их можно плюсом.
   const expand = (id: string) =>
     setExpanded((current) => (current.includes(id) ? current : [...current, id]));
+
+  /* --- Перетаскивание строк -------------------------------------------------
+     Тянется за ручку слева, а не за текст: щелчок по подсказке вставляет её
+     в поле, и если бы тянулась вся строка, дрогнувшая при вставке рука молча
+     меняла бы порядок в общем справочнике клиники.
+     События указателя, а не нативный HTML5 drag-and-drop: нужен свой
+     индикатор «куда встанет» и автопрокрутка, а нативный в узкой панели ещё
+     и рисует призрак строки поверх соседних. */
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{
+    id: string;
+    /** Уровень: `""` — верхний, id подсказки — её подпункты. */
+    levelKey: string;
+    pointerId: number;
+    startY: number;
+    x: number;
+    y: number;
+    active: boolean;
+    target: { id: string; after: boolean } | null;
+  } | null>(null);
+  const [drag, setDrag] = useState<{
+    id: string;
+    target: { id: string; after: boolean } | null;
+  } | null>(null);
+  const scrollDirRef = useRef(0);
+  const scrollFrameRef = useRef(0);
+
+  useEffect(
+    () => () => {
+      if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+    },
+    [],
+  );
+
+  /** Строка под курсором и сторона, к которой она встанет. */
+  const rowAt = (x: number, y: number) => {
+    const element = document.elementFromPoint(x, y);
+    const row = element?.closest<HTMLElement>("[data-drag-row]");
+    if (!row) return null;
+    const rect = row.getBoundingClientRect();
+    return {
+      id: row.dataset.entryId ?? "",
+      levelKey: row.dataset.levelKey ?? "",
+      after: y > rect.top + rect.height / 2,
+    };
+  };
+
+  const updateDragTarget = () => {
+    const session = dragRef.current;
+    if (!session?.active) return;
+    const hit = rowAt(session.x, session.y);
+    // Тянуть можно только внутри своего уровня: подсказку — среди подсказок,
+    // подпункт — среди подпунктов своей подсказки. Иначе пришлось бы менять
+    // родителя, а «перенёс случайно и стал подпунктом» — это уже не
+    // перестановка, а перестройка справочника.
+    const target =
+      hit && hit.id !== session.id && hit.levelKey === session.levelKey
+        ? { id: hit.id, after: hit.after }
+        : null;
+    session.target = target;
+    setDrag({ id: session.id, target });
+  };
+
+  const tickAutoScroll = () => {
+    const box = listRef.current;
+    const session = dragRef.current;
+    if (!box || !session?.active || scrollDirRef.current === 0) {
+      scrollFrameRef.current = 0;
+      return;
+    }
+    box.scrollTop += scrollDirRef.current * 8;
+    // Строки уехали под неподвижный курсор — цель пересчитываем здесь же,
+    // иначе индикатор остался бы на прежней строке, а запись встала бы к
+    // другой.
+    updateDragTarget();
+    scrollFrameRef.current = requestAnimationFrame(tickAutoScroll);
+  };
+
+  const setAutoScroll = (y: number) => {
+    const box = listRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    const edge = 24;
+    const direction = y < rect.top + edge ? -1 : y > rect.bottom - edge ? 1 : 0;
+    scrollDirRef.current = direction;
+    if (direction !== 0 && scrollFrameRef.current === 0) {
+      scrollFrameRef.current = requestAnimationFrame(tickAutoScroll);
+    }
+  };
+
+  const stopDrag = () => {
+    dragRef.current = null;
+    scrollDirRef.current = 0;
+    if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = 0;
+    setDrag(null);
+  };
+
+  const startDrag = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    id: string,
+    levelKey: string,
+  ) => {
+    if (event.button !== 0) return;
+    // Иначе браузер начнёт выделять текст и «утащит» картинку вместо строки.
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      id,
+      levelKey,
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      target: null,
+    };
+  };
+
+  const moveDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const session = dragRef.current;
+    if (!session || session.pointerId !== event.pointerId) return;
+    session.x = event.clientX;
+    session.y = event.clientY;
+    if (!session.active) {
+      // Порог в 4 px: без него дрожание руки при нажатии на ручку сразу
+      // включало бы перетаскивание и рисовало индикатор.
+      if (Math.abs(event.clientY - session.startY) < 4) return;
+      session.active = true;
+      setDrag({ id: session.id, target: null });
+    }
+    updateDragTarget();
+    setAutoScroll(event.clientY);
+  };
+
+  const finishDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const session = dragRef.current;
+    if (!session || session.pointerId !== event.pointerId) return;
+    stopDrag();
+    if (!session.active || !session.target) return;
+
+    const ids =
+      session.levelKey === ""
+        ? tree.map((node) => node.entry.id)
+        : (tree
+            .find((node) => node.entry.id === session.levelKey)
+            ?.children.map((child) => child.entry.id) ?? []);
+    const without = ids.filter((id) => id !== session.id);
+    const at = without.indexOf(session.target.id);
+    if (at < 0) return;
+    const next = [...without];
+    next.splice(session.target.after ? at + 1 : at, 0, session.id);
+    // Упал на прежнее место — на сервер не ходим.
+    if (next.join("|") === ids.join("|")) return;
+    onReorder(session.levelKey, next);
+  };
+
+  /** Линия, показывающая, куда встанет строка. */
+  const dropLine = (id: string) => {
+    if (!drag?.target || drag.target.id !== id) return undefined;
+    return {
+      boxShadow: drag.target.after ? "inset 0 -2px 0 #185fa5" : "inset 0 2px 0 #185fa5",
+    } as CSSProperties;
+  };
 
   return (
     <aside
@@ -1506,15 +1795,28 @@ const SuggestionPanel = ({
               чем листать.
               Книжка перед текстом — из прототипа доктора: она помечает
               «это подсказка из справочника», а не просто строка списка. */}
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
             {rows.length > 0 ? (
               rows.map(({ node, children, toggleable, open }) => (
                 <div key={node.entry.id} data-testid="suggestion-group">
                   <div
                     data-testid="dictionary-row"
+                    data-drag-row=""
+                    data-entry-id={node.entry.id}
+                    data-level-key=""
                     data-scope={node.entry.scope}
-                    className="group flex items-start gap-1 border-b border-[#dde2e9] py-1.5 hover:bg-[#e3e9f2]"
+                    style={dropLine(node.entry.id)}
+                    className={`group flex items-start gap-1 border-b border-[#dde2e9] py-1.5 hover:bg-[#e3e9f2] ${
+                      drag?.id === node.entry.id ? "opacity-50" : ""
+                    }`}
                   >
+                    <DragHandle
+                      label={node.text}
+                      disabled={Boolean(query)}
+                      onStart={(event) => startDrag(event, node.entry.id, "")}
+                      onMove={moveDrag}
+                      onEnd={finishDrag}
+                    />
                     {hasAnyChildren ? (
                       toggleable ? (
                         <button
@@ -1588,8 +1890,14 @@ const SuggestionPanel = ({
                         <div
                           key={child.entry.id}
                           data-testid="suggestion-child"
+                          data-drag-row=""
+                          data-entry-id={child.entry.id}
+                          data-level-key={node.entry.id}
                           data-scope={child.entry.scope}
-                          className="group flex items-start gap-1 border-b border-[#e8ecf1] py-1 hover:bg-[#e3e9f2]"
+                          style={dropLine(child.entry.id)}
+                          className={`group flex items-start gap-1 border-b border-[#e8ecf1] py-1 hover:bg-[#e3e9f2] ${
+                            drag?.id === child.entry.id ? "opacity-50" : ""
+                          }`}
                         >
                           <span className="w-3.5 shrink-0" aria-hidden="true" />
                           {/* Подпункт отбит вправо и помечен линией: видно,
@@ -1597,6 +1905,15 @@ const SuggestionPanel = ({
                               Линия стоит на обёртке, а не на кнопке — иначе
                               она проходила бы между книжкой и текстом. */}
                           <div className="flex min-w-0 flex-1 items-start gap-1 border-l-2 border-[#cfd7e2] pl-2">
+                            <DragHandle
+                              label={child.text}
+                              disabled={Boolean(query)}
+                              onStart={(event) =>
+                                startDrag(event, child.entry.id, node.entry.id)
+                              }
+                              onMove={moveDrag}
+                              onEnd={finishDrag}
+                            />
                             <Book
                               className="mt-[1px] h-3.5 w-3.5 shrink-0 text-[#9aa6b5]"
                               strokeWidth={1.8}
@@ -3295,6 +3612,40 @@ const DoctorDatabase = () => {
     removeDictionaryEntry(own.id);
   };
 
+  /**
+   * Перестановка строк мышью.
+   *
+   * Сначала браузер, потом сервер — как и у остальных правок справочника:
+   * программа должна работать и без связи. Но, в отличие от текста записи,
+   * порядок восстанавливается не сам: `mergeServerDictionaries` дописывает
+   * пропавшие записи, а изменённые номера не сверяет. Поэтому, если сервер
+   * не принял перестановку, досылаем её по одной записи тем действием,
+   * которое знает любая версия api/index.php. Иначе порядок остался бы
+   * только в этом браузере и пропал при входе с другого компьютера.
+   */
+  const reorderActiveSuggestions = (levelKey: string, orderedIds: string[]) => {
+    if (!activeSuggestionTarget) return;
+    const result = reorderSiblings(
+      dictionaryRef.current,
+      activeSuggestionTarget.label,
+      panelScope,
+      levelKey,
+      orderedIds,
+    );
+    if (!result) return;
+
+    mutateDictionaries(() => result.entries);
+    if (result.changed.length === 0) return;
+
+    apiReorderDictionaryEntries(result.changed).catch(() => {
+      const byId = new Map(result.entries.map((entry) => [entry.id, entry]));
+      result.changed.forEach((item) => {
+        const entry = byId.get(item.id);
+        if (entry) apiSaveDictionaryEntry(entry).catch(() => undefined);
+      });
+    });
+  };
+
   const updateDraftRecords = (nextRecords: MedicalRecords) => {
     recordsRef.current = nextRecords;
     setRecords(nextRecords);
@@ -4287,6 +4638,7 @@ const DoctorDatabase = () => {
               onAdd={addActiveSuggestion}
               onDelete={deleteActiveSuggestion}
               onPick={(value) => activeSuggestionTarget?.insert(value)}
+              onReorder={reorderActiveSuggestions}
               onClose={() => setActiveSuggestionTarget(null)}
               onOpenDictionaries={() => openDictionaries()}
             />
