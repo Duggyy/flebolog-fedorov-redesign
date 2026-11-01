@@ -353,7 +353,12 @@ export const parseWordParagraphs = (xml: string): ParsedParagraph[] => {
       // вместо отступа и между колонками («протяженность\tкатетров»). Пробел
       // читается как пробел, а прежняя сборка шаблона выбрасывала её совсем,
       // из-за чего слова слипались в «катетров( см)».
-      const runText = pieces.join("") + (hasTab ? " " : "");
+      //
+      // Пробел добавляем только если его ещё нет: перед табуляцией часто уже
+      // стоит пробел («ВИЧ, » + таб + «HBsAg»), и второй давал двойной —
+      // ровно так расходился «Госпитальный комплекс - RW, ВИЧ, HBsAg».
+      const tab = hasTab && !/\s$/.test(text) ? " " : "";
+      const runText = pieces.join("") + tab;
       if (!runText) continue;
       // Пробельный прогон — это тоже текст. Word выносит пробел между словами
       // в отдельный `<w:r>` с `xml:space="preserve"`, когда проверка орфографии
@@ -377,7 +382,24 @@ export const parseWordParagraphs = (xml: string): ParsedParagraph[] => {
 };
 
 /** Разбирает .docx обратно в разделы справочника. */
-export const parseDictionaryDocx = async (data: ArrayBuffer): Promise<ParsedDictionary> => {
+export type ParseDictionaryOptions = {
+  /**
+   * Абзац не считается заголовком, даже если выделен жирным.
+   *
+   * Зачем. В шаблоне доктора жирным выделены не только разделы: коды МКБ
+   * («I87.8 Другие уточнённые поражения вен») и служебное «-и» тоже жирные.
+   * Если считать их заголовками, их записи уезжают в отдельные «разделы»,
+   * которым не находится поля, и пропадают — так терялись 15 записей
+   * «Код МКБ» и строка «Перевязки». Отбор должен происходить ЗДЕСЬ, пока
+   * абзацы ещё не разложены: иначе строку уже не вернуть в предыдущий раздел.
+   */
+  ignoreTitle?: (text: string) => boolean;
+};
+
+export const parseDictionaryDocx = async (
+  data: ArrayBuffer,
+  options: ParseDictionaryOptions = {},
+): Promise<ParsedDictionary> => {
   const files = await unzip(new Uint8Array(data));
   const documentPart = files.get("word/document.xml");
   if (!documentPart) {
@@ -393,7 +415,7 @@ export const parseDictionaryDocx = async (data: ArrayBuffer): Promise<ParsedDict
     const isChild = /^\s*[-–—]/.test(item.text);
     // Раздел — жирный абзац без дефиса. Подпункт жирным не бывает: врач
     // выделяет жирным именно заголовки.
-    if (item.bold && !isChild) {
+    if (item.bold && !isChild && !options.ignoreTitle?.(item.text)) {
       sections.push({ title: item.text.replace(/\s*:\s*$/, "").trim(), entries: [] });
       continue;
     }

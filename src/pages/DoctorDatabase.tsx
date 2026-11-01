@@ -71,6 +71,7 @@ import {
   type DictionaryDocSection,
 } from "@/lib/dictionary-docx";
 import { DoctorUser, emptyDoctorUser, initialDoctors, loadDoctorUsers } from "@/lib/doctor-users";
+import { ignoreHeaderPattern, mapDocumentSections } from "@/lib/ib-section-map";
 
 type Patient = {
   id: string;
@@ -837,7 +838,7 @@ const saveDictionaries = (entries: DictionaryEntry[]) => {
 };
 
 /**
- * Копия справочников до загрузки шаблона.
+ * Копия справочников до загрузки из Word.
  *
  * Нужна ровно для одного — отменить загрузку, если она легла не так. Пятьсот
  * с лишним записей руками не откатишь, а «попробуем и посмотрим» без отмены
@@ -847,14 +848,6 @@ type TemplateBackup = {
   at: string;
   version: string;
   entries: DictionaryEntry[];
-};
-
-/** Разобранный файл шаблона, который лежит рядом с приложением. */
-type TemplatePayload = {
-  version: string;
-  source: string;
-  sections: Array<{ title: string; entries: string[] }>;
-  skipped: Array<{ title: string; count: number; entries: string[] }>;
 };
 
 const templateBackupStorageKey = "clinicbase-template-backup-v1";
@@ -868,24 +861,6 @@ const loadTemplateBackup = (): TemplateBackup | null => {
   } catch {
     return null;
   }
-};
-
-/**
- * Читает шаблон. Лежит в public-clinicbase/data и уезжает вместе со сборкой,
- * поэтому на сервере клиники отдельная загрузка файла не нужна.
- */
-const readTemplateFile = async (): Promise<TemplatePayload> => {
-  const response = await fetch(`${import.meta.env.BASE_URL}data/dictionary-template.json`, {
-    cache: "no-cache",
-  });
-  if (!response.ok) {
-    throw new Error(`файл шаблона не найден (HTTP ${response.status})`);
-  }
-  const payload = (await response.json()) as TemplatePayload;
-  if (!Array.isArray(payload.sections)) {
-    throw new Error("файл шаблона повреждён");
-  }
-  return payload;
 };
 
 /**
@@ -2704,7 +2679,7 @@ const DictionariesDialog = ({
           </div>
           <p className="text-[10px] leading-tight text-muted-foreground">
             {scope === "global"
-              ? "Общий справочник клиники: наполняется из шаблона, изменения видны всем врачам."
+              ? "Общий справочник клиники: наполняется из файла Word, изменения видны всем врачам."
               : "Личные записи видите только вы."}
           </p>
           <div className="ml-auto flex flex-wrap gap-1.5">
@@ -3024,23 +2999,14 @@ const DoctorDatabase = () => {
   const [dictionaryEntries, setDictionaryEntries] = useState(loadDictionaries);
   const [dictionariesOpen, setDictionariesOpen] = useState(false);
   const [dictionarySection, setDictionarySection] = useState("");
-  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
-  const [templateInfo, setTemplateInfo] = useState<{
-    version: string;
-    sections: number;
-    entries: number;
-    skipped: number;
-  } | null>(null);
-  const [templateBusy, setTemplateBusy] = useState(false);
-  const [templateError, setTemplateError] = useState("");
   const [templateBackup, setTemplateBackup] = useState<TemplateBackup | null>(loadTemplateBackup);
-  // Загрузка справочника из файла Word. Отдельно от шаблона ИБ, потому что
-  // файл выбирает врач: показываем, что прочиталось из его документа, до того
-  // как что-то попадёт в базу.
+  // Загрузка справочника из файла Word: файл выбирает врач, и показываем, что
+  // прочиталось из его документа, до того как что-то попадёт в базу.
   const [wordDialogOpen, setWordDialogOpen] = useState(false);
   const [wordImport, setWordImport] = useState<{
     name: string;
     sections: DictionaryDocSection[];
+    unknown: Array<{ title: string; count: number }>;
     warnings: string[];
   } | null>(null);
   const [wordBusy, setWordBusy] = useState(false);
@@ -3470,119 +3436,6 @@ const DoctorDatabase = () => {
     setDictionariesOpen(true);
   };
 
-  /** Открыть подтверждение загрузки и заодно показать, сколько там записей. */
-  const openTemplateDialog = async () => {
-    setTemplateDialogOpen(true);
-    setTemplateError("");
-    if (templateInfo) return;
-    setTemplateBusy(true);
-    try {
-      const payload = await readTemplateFile();
-      setTemplateInfo({
-        version: payload.version,
-        sections: payload.sections.length,
-        entries: payload.sections.reduce((sum, section) => sum + section.entries.length, 0),
-        skipped: payload.skipped.reduce((sum, section) => sum + section.count, 0),
-      });
-    } catch (error) {
-      setTemplateError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setTemplateBusy(false);
-    }
-  };
-
-  /**
-   * Загрузка шаблона истории болезни в «Общие».
-   *
-   * Заменяет общие записи целиком, а не дописывает: «Общие» — это и есть
-   * справочник клиники из шаблона. Личные не трогаем. Перед записью кладём
-   * копию прежнего состояния — она и есть отмена.
-   */
-  const applyTemplate = async () => {
-    setTemplateBusy(true);
-    setTemplateError("");
-    try {
-      const payload = await readTemplateFile();
-      const imported: DictionaryEntry[] = [];
-      payload.sections.forEach((section) => {
-        // Подпункт привязываем к родителю сразу, id: порядок строк после
-        // загрузки может измениться (и менялся — см. buildSuggestionTree),
-        // а связь «этот подпункт к этой подсказке» должна пережить любую
-        // пересортировку. Дефис остаётся разметкой: он нужен, чтобы врач
-        // видел структуру в самом документе, и срезается при показе.
-        let lastParentId = "";
-        section.entries.forEach((text, index) => {
-          const id = stableId("global", section.title, text);
-          const child = isSuggestionChild(text);
-          imported.push({
-            // id устойчивый: повторная загрузка того же шаблона не создаст
-            // вторую копию записи, а отмена вернёт те же идентификаторы.
-            id,
-            section: section.title,
-            short: text,
-            full: "",
-            color: "",
-            parentId: child ? lastParentId : "",
-            order: index,
-            scope: "global",
-          });
-          if (!child) lastParentId = id;
-        });
-      });
-      if (imported.length === 0) {
-        setTemplateError("в файле шаблона нет записей");
-        return;
-      }
-
-      const current = dictionaryRef.current;
-      const backup: TemplateBackup = {
-        at: new Date().toISOString(),
-        version: payload.version,
-        entries: current,
-      };
-      localStorage.setItem(templateBackupStorageKey, JSON.stringify(backup));
-      setTemplateBackup(backup);
-
-      mutateDictionaries(() => [
-        ...current.filter((entry) => entry.scope === "personal"),
-        ...imported,
-      ]);
-
-      // Сохранение на сервер ждём и проверяем. Раньше здесь стояло
-      // `.catch(() => undefined)`, и это было тихой ложью: если на хостинге
-      // остался старый api/index.php без обработчика dictionaries_replace,
-      // запрос падал с 404, а врач всё равно видел «Шаблон загружен».
-      // Записи жили в этом браузере и пропадали при входе с другого
-      // компьютера. Пятьсот записей — не то, что можно потерять молча.
-      let savedOnServer = false;
-      let saveError = "";
-      try {
-        await apiReplaceGlobalDictionaries(imported);
-        savedOnServer = true;
-      } catch (error) {
-        saveError = describeServerFailure(error);
-      }
-
-      setTemplateDialogOpen(false);
-      if (savedOnServer) {
-        toast({
-          title: "Шаблон загружен",
-          description: `${imported.length} записей в «Общие». Отменить — в меню «Справочники».`,
-        });
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Шаблон загружен только в этом браузере",
-          description: `На сервер сохранить не удалось: ${saveError}. Записи видны сейчас, но пропадут при входе с другого компьютера. Проверьте, что на хостинг выгружен новый api/index.php.`,
-        });
-      }
-    } catch (error) {
-      setTemplateError(error instanceof Error ? error.message : String(error));
-    } finally {
-      setTemplateBusy(false);
-    }
-  };
-
   /**
    * Возврат к состоянию до загрузки — и в браузере, и на сервере.
    *
@@ -3610,7 +3463,7 @@ const DoctorDatabase = () => {
       setTemplateBackup(null);
       toast({
         title: "Загрузка отменена",
-        description: "Справочники вернулись к состоянию до загрузки шаблона.",
+        description: "Справочники вернулись к состоянию до загрузки.",
       });
       return;
     }
@@ -3618,7 +3471,7 @@ const DoctorDatabase = () => {
     toast({
       variant: "destructive",
       title: "Отменено только в этом браузере",
-      description: `На сервере шаблон остался: ${revertError}. Пункт «Отменить загрузку шаблона» остался в меню — попробуйте ещё раз.`,
+      description: `На сервере прежний справочник не вернулся: ${revertError}. Пункт «Отменить последнюю загрузку» остался в меню — попробуйте ещё раз.`,
     });
   };
 
@@ -3651,7 +3504,7 @@ const DoctorDatabase = () => {
       toast({
         variant: "destructive",
         title: "Справочник пуст",
-        description: "Выгружать нечего: сначала загрузите шаблон или добавьте записи.",
+        description: "Выгружать нечего: сначала загрузите справочник из Word или добавьте записи.",
       });
       return;
     }
@@ -3705,6 +3558,10 @@ const DoctorDatabase = () => {
    * Диалог открываем сразу, ещё до разбора: разбор большого документа занимает
    * мгновение, но если файл не от Word, врач должен увидеть это в том же окне,
    * где ждал результат, а не в молча закрывшемся выборе файла.
+   *
+   * Разделы сразу раскладываем по полям формы через общую карту: доктор
+   * называет их по-своему («Anamnes morbi», «ДИАГНОЗ»), и без карты 15
+   * разделов из 26 просто не находили бы своего поля.
    */
   const readWordImport = async (file: File) => {
     setWordBusy(true);
@@ -3712,14 +3569,24 @@ const DoctorDatabase = () => {
     setWordImport(null);
     setWordDialogOpen(true);
     try {
-      const parsed = await parseDictionaryDocx(await file.arrayBuffer());
+      const parsed = await parseDictionaryDocx(await file.arrayBuffer(), {
+        // Жирные коды МКБ и служебное «-и» — не разделы, а записи: без этого
+        // 15 записей «Код МКБ» уезжали в несуществующее поле и пропадали.
+        ignoreTitle: (text) => ignoreHeaderPattern.test(text),
+      });
       if (parsed.sections.length === 0) {
         setWordError(
           "в документе нет ни одного раздела. Нужен файл, где названия разделов выделены жирным — как в шаблоне ИБ.",
         );
         return;
       }
-      setWordImport({ name: file.name, sections: parsed.sections, warnings: parsed.warnings });
+      const mapped = mapDocumentSections(parsed.sections, dictionarySections);
+      setWordImport({
+        name: file.name,
+        sections: mapped.sections,
+        unknown: mapped.unknown,
+        warnings: parsed.warnings,
+      });
     } catch (error) {
       setWordError(error instanceof Error ? error.message : String(error));
     } finally {
@@ -3730,7 +3597,7 @@ const DoctorDatabase = () => {
   /**
    * Запись прочитанного документа в «Общие».
    *
-   * Заменяет общие записи целиком, как и загрузка шаблона: файл Word — это
+   * Заменяет общие записи целиком, а не дописывает: файл Word — это
    * справочник клиники, а не добавка к нему. Копия прежнего состояния
    * сохраняется, поэтому отмена та же — в меню «Справочники».
    */
@@ -3806,26 +3673,24 @@ const DoctorDatabase = () => {
   };
 
   /**
-   * Разделы файла, которых нет среди полей формы.
+   * Разделы файла, которым не нашлось поля формы.
    *
    * Такие разделы НЕ загружаем, и вот почему. Раздел справочника ищется по
-   * подписи поля: «Anamnes morbi» из документа ляжет в базу, но в панели
+   * подписи поля: раздел, которого нет в форме, ляжет в базу, но в панели
    * подсказок не появится никогда. Пятьсот записей в невидимых разделах —
    * это не «на всякий случай», это мусор, который потом уедет обратно в
    * выгрузку и будет путать. Лучше сказать заранее и не писать.
+   *
+   * Названия в документе при этом не обязаны совпадать с полями: их приводит
+   * карта `ib-section-map`, общая со сборщиком шаблона.
    */
-  const wordKnownSections = wordImport
-    ? wordImport.sections.filter((section) => dictionarySections.includes(section.title))
-    : [];
-  const wordUnknownSections = wordImport
-    ? wordImport.sections
-        .map((section) => section.title)
-        .filter((title) => !dictionarySections.includes(title))
-    : [];
+  const wordKnownSections = wordImport ? wordImport.sections : [];
+  const wordUnknownSections = wordImport ? wordImport.unknown : [];
   const wordEntryCount = wordKnownSections.reduce(
     (sum, section) => sum + section.entries.length,
     0,
   );
+  const wordUnknownCount = wordUnknownSections.reduce((sum, item) => sum + item.count, 0);
 
   const activateSuggestionTarget = (target: SuggestionTarget) => {
     setActiveSuggestionTarget(target);
@@ -4610,8 +4475,9 @@ const DoctorDatabase = () => {
                 <DropdownMenuSeparator />
                 {/* Word — это файл, а не сервер: врач может отдать справочник
                     коллеге, поправить формулировки в Word и вернуть обратно.
-                    Поэтому выгрузка и загрузка стоят рядом и отделены от
-                    «Шаблона ИБ», который берётся из сборки, а не с диска. */}
+                    Загрузка одна и всегда открывает выбор файла: пункта
+                    «взять вложенный набор» больше нет — он делал то же самое,
+                    но без выбора файла, и это путало (01.11.2026). */}
                 <DropdownMenuItem
                   data-testid="dictionary-menu-export-word"
                   onSelect={() => {
@@ -4630,26 +4496,18 @@ const DoctorDatabase = () => {
                   <FileUp className="mr-2 h-3.5 w-3.5" />
                   Загрузить из Word
                 </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  data-testid="dictionary-menu-template"
-                  onSelect={() => {
-                    void openTemplateDialog();
-                  }}
-                  className="text-[11px]"
-                >
-                  <FileDown className="mr-2 h-3.5 w-3.5" />
-                  Загрузить шаблон ИБ
-                </DropdownMenuItem>
                 {templateBackup ? (
-                  <DropdownMenuItem
-                    data-testid="dictionary-menu-undo-template"
-                    onSelect={undoTemplate}
-                    className="text-[11px]"
-                  >
-                    <Undo2 className="mr-2 h-3.5 w-3.5" />
-                    Отменить загрузку шаблона
-                  </DropdownMenuItem>
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      data-testid="dictionary-menu-undo-import"
+                      onSelect={undoTemplate}
+                      className="text-[11px]"
+                    >
+                      <Undo2 className="mr-2 h-3.5 w-3.5" />
+                      Отменить последнюю загрузку
+                    </DropdownMenuItem>
+                  </>
                 ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
@@ -4939,67 +4797,6 @@ const DoctorDatabase = () => {
         onImport={importDictionaryEntries}
       />
 
-      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
-        <DialogContent className="max-w-[480px]" data-testid="template-dialog">
-          <DialogHeader className="space-y-1">
-            <DialogTitle className="text-base">Загрузить шаблон ИБ</DialogTitle>
-            <DialogDescription className="text-[11px] leading-snug">
-              Записи из «Шаблон ИБ 2026_10» встанут в «Общие». Прежние общие записи
-              заменятся, личные останутся как были.
-            </DialogDescription>
-          </DialogHeader>
-
-          {templateError ? (
-            <p className="rounded-sm border border-destructive/40 bg-destructive/5 p-2 text-[11px] leading-snug text-destructive">
-              Не удалось прочитать шаблон: {templateError}
-            </p>
-          ) : templateInfo ? (
-            <div className="space-y-1 text-[11px] leading-snug">
-              <p>
-                <span className="font-semibold">{templateInfo.entries}</span> записей
-                в {templateInfo.sections} разделах.
-              </p>
-              {templateInfo.skipped > 0 ? (
-                <p className="text-muted-foreground">
-                  Ещё {templateInfo.skipped} записей не войдут: для их разделов в форме нет полей.
-                </p>
-              ) : null}
-              <p className="text-muted-foreground">
-                Строки с дефисом в начале станут подпунктами предыдущей подсказки — в панели они
-                раскрываются по плюсу.
-              </p>
-              <p className="text-muted-foreground">
-                Если ляжет не так — отмена там же, в меню «Справочники».
-              </p>
-            </div>
-          ) : (
-            <p className="text-[11px] text-muted-foreground">Читаю шаблон…</p>
-          )}
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-[11px]"
-              onClick={() => setTemplateDialogOpen(false)}
-            >
-              Отмена
-            </Button>
-            <Button
-              size="sm"
-              className="h-7 text-[11px]"
-              data-testid="template-apply"
-              disabled={templateBusy || !templateInfo}
-              onClick={() => {
-                void applyTemplate();
-              }}
-            >
-              {templateBusy ? "Загружаю…" : "Загрузить"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Скрытый выбор файла: кнопка меню открывает его программно, потому что
           пункт меню — не <label>, и связать их без лишней обёртки нечем. */}
       <input
@@ -5047,12 +4844,23 @@ const DoctorDatabase = () => {
               {wordUnknownSections.length > 0 ? (
                 <div className="rounded-sm border border-amber-300 bg-amber-50 p-2 text-amber-900">
                   <p className="font-semibold">
-                    {wordUnknownSections.length} разделов не загружаются — их нет среди полей формы:
+                    {wordUnknownSections.length} разделов не загружаются — им не нашлось поля формы
+                    {wordUnknownCount > 0 ? ` (${wordUnknownCount} записей)` : ""}:
                   </p>
-                  <p className="mt-0.5 break-words">{wordUnknownSections.join(", ")}</p>
+                  <ul className="mt-0.5 list-disc pl-4">
+                    {wordUnknownSections.slice(0, 12).map((item) => (
+                      <li key={item.title}>
+                        {item.title} — {item.count}
+                      </li>
+                    ))}
+                  </ul>
+                  {wordUnknownSections.length > 12 ? (
+                    <p className="mt-0.5">и ещё {wordUnknownSections.length - 12}</p>
+                  ) : null}
                   <p className="mt-1">
                     Раздел справочника ищется по подписи поля, поэтому такие записи не появились бы
-                    в панели подсказок. Если раздел нужен — назовите заголовок в документе так же,
+                    в панели подсказок. Названия из шаблона ИБ («Anamnes morbi», «ДИАГНОЗ») программа
+                    знает; если раздел всё равно не нашёлся — назовите заголовок в документе так же,
                     как называется поле формы.
                   </p>
                 </div>

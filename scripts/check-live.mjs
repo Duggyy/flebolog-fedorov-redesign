@@ -13,15 +13,14 @@
  * Что проверяется:
  *   1. Сайт отдаётся и ссылается на бандл, который существует.
  *   2. Бандл на сервере — тот же, что в локальной сборке (не забыли выгрузить).
- *   3. data/dictionary-template.json на месте и разбирается.
- *   4. api/index.php отвечает JSON, а не HTML (PHP работает).
- *   5. api/config.php существует: иначе API честно скажет, что не настроен.
- *   6. База доступна: `session` не возвращает database_connection_failed.
- *   7. С флагом `--probe-width` — не обрезается ли длинный текст записи.
+ *   3. api/index.php отвечает JSON, а не HTML (PHP работает).
+ *   4. api/config.php существует: иначе API честно скажет, что не настроен.
+ *   5. База доступна: `session` не возвращает database_connection_failed.
+ *   6. С флагом `--probe-width` — не обрезается ли длинный текст записи.
  *      Проверка пишет пробную запись, читает её обратно и удаляет.
- *   8. С флагом `--probe-save` — сохраняется ли приём. Чтение и запись ломаются
+ *   7. С флагом `--probe-save` — сохраняется ли приём. Чтение и запись ломаются
  *      по отдельности, и второе не видно, пока не нажмёшь «Сохранить».
- *   9. Сервер знает новые поля приёма из шаблона ИБ (повод и случай обращения,
+ *   8. Сервер знает новые поля приёма из шаблона ИБ (повод и случай обращения,
  *      классификация диагноза, вид операции, клинические данные, перевязка).
  *      Старый api/index.php их не отдаёт — и тогда они теряются молча.
  *
@@ -104,27 +103,7 @@ if (!remoteBundle) {
   }
 }
 
-// 3. Шаблон справочника.
-const template = await get(`${BASE}/data/dictionary-template.json`);
-if (template.status !== 200) {
-  fail("data/dictionary-template.json не отдаётся", `HTTP ${template.status}`);
-} else {
-  try {
-    const parsed = JSON.parse(template.text);
-    const entries = Array.isArray(parsed.sections)
-      ? parsed.sections.reduce((sum, section) => sum + (section.entries?.length ?? 0), 0)
-      : 0;
-    if (!entries) {
-      fail("шаблон пустой", "файл есть, но записей в нём нет");
-    } else {
-      ok("шаблон справочника на месте", `${parsed.sections.length} разделов, ${entries} записей`);
-    }
-  } catch {
-    fail("шаблон не разбирается как JSON", "возможно, вместо файла отдаётся страница сайта");
-  }
-}
-
-// 4. API отвечает JSON — значит PHP на хостинге работает.
+// 3. API отвечает JSON — значит PHP на хостинге работает.
 const session = await get(`${BASE}/api/index.php?action=session`);
 const looksLikeHtml = session.text.trimStart().startsWith("<");
 if (looksLikeHtml) {
@@ -152,7 +131,7 @@ if (looksLikeHtml) {
   }
 }
 
-// 5. config.php существует. Если файла нет, .htaccess отдаёт вместо него
+// 4. config.php существует. Если файла нет, .htaccess отдаёт вместо него
 //    страницу сайта — по этому признаку и ловим.
 const configProbe = await get(`${BASE}/api/config.php`);
 const configIsFallback = configProbe.text.trimStart().toLowerCase().startsWith("<!doctype html");
@@ -164,7 +143,7 @@ if (configProbe.status === 200 && configIsFallback) {
   warn("api/config.php отвечает не 200", `HTTP ${configProbe.status}`);
 }
 
-// 6. Проверка под учётной записью — только если передали логин и пароль.
+// 5. Проверка под учётной записью — только если передали логин и пароль.
 //    Без них не видно самого частого: таблицы нет, а сессия и вход работают.
 //    Именно так 23.10.2026 «сервер недоступен» оказался «не применена миграция».
 const login = readFlag("--login", "");
