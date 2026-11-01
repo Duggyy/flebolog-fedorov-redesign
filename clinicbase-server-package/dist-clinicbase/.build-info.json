@@ -1,8 +1,8 @@
 {
   "app": "clinicbase",
-  "sha": "be737ff1a742d627553ce4e5c416b9002ac92b13",
-  "shortSha": "be737ff",
-  "subject": "Пакет ClinicBase: сборка с загрузкой справочника из Word",
-  "builtAt": "2026-10-30T23:11:13.531Z",
+  "sha": "289d0a6bde5ad9a28e505467a309d05e6fe7d310",
+  "shortSha": "289d0a6",
+  "subject": "Один пункт загрузки справочника — и он спрашивает файл",
+  "builtAt": "2026-11-01T09:29:00.058Z",
   "dirty": true
 }
